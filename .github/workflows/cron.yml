@@ -1,0 +1,40 @@
+name: Reservas Deportes
+
+on:
+  schedule:
+    # Madrid (hora local):
+    # Sábado a las 15:30, 16:30 y 17:30
+    - cron: '30 15,16,17 * * 6'
+    # Domingo a las 16:30
+    - cron: '30 16 * * 0'
+    # Lunes a las 15:30 y 16:30
+    - cron: '30 15,16 * * 1'
+    # Martes a las 16:30
+    - cron: '30 16 * * 2'
+    # Miércoles a las 14:30 y 15:30
+    - cron: '30 14,15 * * 3'
+
+  # Permite lanzarlo manualmente desde GitHub (Actions → Run workflow)
+  workflow_dispatch:
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Madrid   # 🔹 Fuerza la zona horaria a Madrid
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Run script
+        run: python ProgramaFundi.py
