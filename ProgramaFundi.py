@@ -22,8 +22,8 @@ coleccion = db["clases_reservadas"]   # Colección
 print("✅ Conectado a MongoDB Atlas correctamente")
 
 # --- Cargar variables del .env ---
-EMAIL = os.getenv("gmail")
-PASSWORD = os.getenv("psswd")
+EMAIL = os.getenv("EMAIL")
+PASSWORD = os.getenv("PASSWORD")
 
 RESERVADAS_FILE = os.path.join(os.path.dirname(__file__), "clases_reservadas.json")
 

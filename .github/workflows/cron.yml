@@ -22,6 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TZ: Europe/Madrid   # 🔹 Fuerza la zona horaria a Madrid
+      MONGO_URL: ${{ secrets.MONGO_URL }}
+      EMAIL: ${{ secrets.GMAIL }}
+      PASSWORD: ${{ secrets.PSSWD }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
