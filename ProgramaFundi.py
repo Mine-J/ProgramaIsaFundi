@@ -223,7 +223,7 @@ async def main():
             fecha_proxima_clase = min(proximas_fechas)
             hora_apertura = fecha_proxima_clase - datetime.timedelta(hours=49)
             tiempo_espera = (hora_apertura - ahora).total_seconds()
-            if tiempo_espera > 0 and tiempo_espera < 120:
+            if tiempo_espera > 0:
                 horas = int(tiempo_espera // 3600)
                 minutos = int((tiempo_espera % 3600) // 60)
                 print(f"⏳ Esperando {horas} horas y {minutos} minutos hasta que falten 49 horas para la próxima clase ({fecha_proxima_clase.strftime('%d/%m/%Y %H:%M')})...")
