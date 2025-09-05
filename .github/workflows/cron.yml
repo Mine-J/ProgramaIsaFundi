@@ -14,7 +14,6 @@ on:
     # Miércoles a las 14:29 y 15:29
     - cron: '29 14,15 * * 3'
 
-
   # Permite lanzarlo manualmente desde GitHub (Actions → Run workflow)
   workflow_dispatch:
 
@@ -23,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TZ: Europe/Madrid   # 🔹 Fuerza la zona horaria a Madrid
-      MONGO_URL: ${{ secrets.MONGO_URL }} # Make sure this secret is defined in your repository settings (Settings > Secrets and variables > Actions)
+      MONGO_URL: ${{ secrets.MONGO_URL }}
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
 
@@ -40,6 +39,12 @@ jobs:
         run: |
           pip install -r requirements.txt
           playwright install chromium
+
+      - name: Debug env
+        run: |
+          echo "EMAIL length: ${#EMAIL}"
+          echo "PASSWORD length: ${#PASSWORD}"
+          echo "MONGO_URL length: ${#MONGO_URL}"
 
       - name: Run script
         run: python ProgramaFundi.py
