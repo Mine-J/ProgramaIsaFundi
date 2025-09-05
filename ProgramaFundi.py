@@ -48,7 +48,7 @@ async def guardar_reservada(clase, fecha_clase):
 
 async def main():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False, slow_mo=0)
+        browser = await p.chromium.launch(headless=True, slow_mo=0)
         context = await browser.new_context()
         page = await context.new_page()
 
@@ -233,7 +233,7 @@ async def main():
                 print("🔔 Ya estamos dentro de la ventana de 49 horas para reservar la próxima clase.")
                 print(f"🕒 Podrías reservar desde el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
 
-        # --- Bucle sobre todas las clases durante 2 minutos ---
+        # --- Bucle sobre todas las clases durante 1 minutos ---
         tiempo_limite_global = datetime.datetime.now() + datetime.timedelta(minutes=1)
         clase_reservada = False
 
