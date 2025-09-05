@@ -23,9 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TZ: Europe/Madrid   # 🔹 Fuerza la zona horaria a Madrid
-      MONGO_URL: ${{ secrets.MONGO_URL }}
-      EMAIL: ${{ secrets.GMAIL }}
-      PASSWORD: ${{ secrets.PSSWD }}
+      MONGO_URL: ${{ secrets.MONGO_URL }} # Make sure this secret is defined in your repository settings (Settings > Secrets and variables > Actions)
+      EMAIL: ${{ secrets.EMAIL }}
+      PASSWORD: ${{ secrets.PASSWORD }}
 
     steps:
       - name: Checkout code
