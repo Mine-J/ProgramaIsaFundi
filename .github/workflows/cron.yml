@@ -4,6 +4,8 @@ on:
   schedule:
     
     # Madrid (hora local):
+    # Sábado a las 16:42
+    - cron: '42 16 * * 6'
     # Sábado a las 15:29, 16:29 y 17:29
     - cron: '29 17 * * 6'
     # Domingo a las 16:29
