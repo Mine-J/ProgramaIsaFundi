@@ -4,15 +4,15 @@ on:
   schedule:
     # Madrid (hora local) → UTC (resta 2 horas)
     # Sábado a las 15:29, 16:29 y 17:29 (Madrid) → 13:29, 14:29 y 15:29 (UTC)
-    - cron: "29 13,14,15 * * 6"
+    - cron: "25 13,14,15 * * 6"
     # Domingo a las 16:29 (Madrid) → 14:29 (UTC)
-    - cron: "29 14 * * 0"
+    - cron: "25 14 * * 0"
     # Lunes a las 15:29 y 16:29 (Madrid) → 13:29 y 14:29 (UTC)
-    - cron: "29 13,14 * * 1"
+    - cron: "25 13,14 * * 1"
     # Martes a las 16:29 (Madrid) → 14:29 (UTC)
-    - cron: "29 14 * * 2"
+    - cron: "25 14 * * 2"
     # Miércoles a las 14:29 y 15:29 (Madrid) → 12:29 y 13:29 (UTC)
-    - cron: "29 12,13 * * 3"
+    - cron: "25 12,13 * * 3"
 
   # Permite lanzarlo manualmente desde GitHub (Actions → Run workflow)
   workflow_dispatch:
