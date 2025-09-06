@@ -218,20 +218,24 @@ async def main():
 
         # --- Espera inteligente hasta que falten exactamente 49 horas para la próxima clase ---
         ahora = datetime.datetime.now()
-        proximas_fechas = [proxima_fecha(clase["dia"], clase["hora"]) for clase in CLASES]
+        # Filtra solo las clases cuya apertura aún no ha pasado
+        proximas_fechas = [
+            proxima_fecha(clase["dia"], clase["hora"])
+            for clase in CLASES
+            if (proxima_fecha(clase["dia"], clase["hora"]) - datetime.timedelta(hours=49)) > ahora
+        ]
         if proximas_fechas:
             fecha_proxima_clase = min(proximas_fechas)
             hora_apertura = fecha_proxima_clase - datetime.timedelta(hours=49)
             tiempo_espera = (hora_apertura - ahora).total_seconds()
-            if tiempo_espera > 0:
-                horas = int(tiempo_espera // 3600)
-                minutos = int((tiempo_espera % 3600) // 60)
-                print(f"⏳ Esperando {horas} horas y {minutos} minutos hasta que falten 49 horas para la próxima clase ({fecha_proxima_clase.strftime('%d/%m/%Y %H:%M')})...")
-                print(f"🕒 Podrás reservar la clase el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
-                await asyncio.sleep(tiempo_espera)
-            else:
-                print("🔔 Ya estamos dentro de la ventana de 49 horas para reservar la próxima clase.")
-                print(f"🕒 Podrías reservar desde el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
+            horas = int(tiempo_espera // 3600)
+            minutos = int((tiempo_espera % 3600) // 60)
+            print(f"⏳ Esperando {horas} horas y {minutos} minutos hasta que falten 49 horas para la próxima clase ({fecha_proxima_clase.strftime('%d/%m/%Y %H:%M')})...")
+            print(f"🕒 Podrás reservar la clase el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
+            await asyncio.sleep(tiempo_espera)
+        else:
+            print("🔔 Ya estamos dentro de la ventana de 49 horas para reservar la próxima clase.")
+            print(f"🕒 Podrías reservar desde el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
 
         # --- Bucle sobre todas las clases durante 1 minutos ---
         tiempo_limite_global = datetime.datetime.now() + datetime.timedelta(minutes=1)
