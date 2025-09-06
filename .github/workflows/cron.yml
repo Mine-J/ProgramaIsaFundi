@@ -5,7 +5,7 @@ on:
     
     # Madrid (hora local):
     # Sábado a las 15:29, 16:29 y 17:29
-    - cron: '29 13,14,15 * * 6'
+    - cron: '29 17 * * 6'
     # Domingo a las 16:29
     - cron: '29 14 * * 0'
     # Lunes a las 15:29 y 16:29
