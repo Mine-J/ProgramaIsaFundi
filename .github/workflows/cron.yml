@@ -2,20 +2,17 @@ name: Reservas Deportes
 
 on:
   schedule:
-    
-    # Madrid (hora local):
-    # Sábado a las 16:42
-    - cron: '48 14 * * 6'
-    # Sábado a las 15:29, 16:29 y 17:29
-    - cron: '29 17 * * 6'
-    # Domingo a las 16:29
-    - cron: '29 14 * * 0'
-    # Lunes a las 15:29 y 16:29
-    - cron: '29 13,14 * * 1'
-    # Martes a las 16:29
-    - cron: '29 14 * * 2'
-    # Miércoles a las 14:29 y 15:29
-    - cron: '29 12,13 * * 3'
+    # Madrid (hora local) → UTC (resta 2 horas)
+    # Sábado a las 15:29, 16:29 y 17:29 (Madrid) → 13:29, 14:29 y 15:29 (UTC)
+    - cron: "29 13,14,15 * * 6"
+    # Domingo a las 16:29 (Madrid) → 14:29 (UTC)
+    - cron: "29 14 * * 0"
+    # Lunes a las 15:29 y 16:29 (Madrid) → 13:29 y 14:29 (UTC)
+    - cron: "29 13,14 * * 1"
+    # Martes a las 16:29 (Madrid) → 14:29 (UTC)
+    - cron: "29 14 * * 2"
+    # Miércoles a las 14:29 y 15:29 (Madrid) → 12:29 y 13:29 (UTC)
+    - cron: "29 12,13 * * 3"
 
   # Permite lanzarlo manualmente desde GitHub (Actions → Run workflow)
   workflow_dispatch:
@@ -24,7 +21,7 @@ jobs:
   run-script:
     runs-on: ubuntu-latest
     env:
-      TZ: Europe/Madrid   # 🔹 Fuerza la zona horaria a Madrid
+      TZ: Europe/Madrid # 🔹 Fuerza la zona horaria a Madrid
       MONGO_URL: ${{ secrets.MONGO_URL }}
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
@@ -36,7 +33,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
