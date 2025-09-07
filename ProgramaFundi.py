@@ -197,18 +197,19 @@ async def main():
                     print("🔄 Has vuelto a la página principal (por URL).")
 
                 selector_home = "div#ctl00_divProfile"
-                try:
-                    await page.wait_for_selector(selector_home, timeout=15000)
-                    print("🏠 Página Home cargada correctamente.")
-                except Exception:
-                    print("❌ No se pudo cargar la página Home, esperando indefinidamente.")
-                    while True:
-                        try:
-                            await page.wait_for_selector(selector_home, timeout=60000)
-                            print("🏠 Página Home cargada correctamente.")
-                            break
-                        except:
-                            print("⏳ Aún no está la Home, sigo esperando...")
+                max_intentos = 5
+                intento = 0
+                while intento < max_intentos:
+                    try:
+                        await page.wait_for_selector(selector_home, timeout=60000)
+                        print("🏠 Página Home cargada correctamente.")
+                        break
+                    except Exception:
+                        intento += 1
+                        print(f"⏳ Intento {intento}/{max_intentos}: aún no está la Home...")
+                else:
+                    print("❌ No se pudo cargar la página Home después de varios intentos. Saliendo...")
+                    return False
 
                 await volver_a_fundi_y_actividades(page)
                 return True
@@ -303,7 +304,7 @@ async def main():
             await asyncio.sleep(2)  # Espera corta antes de volver a recorrer todas las clases
 
         print("⏹ No se pudo reservar ninguna clase en 2 minutos. Cerrando programa.")
-        #await browser.close()
-        #return 0
+        await browser.close()
+        return 0
 
 asyncio.run(main())
