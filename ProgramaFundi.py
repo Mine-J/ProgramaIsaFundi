@@ -48,7 +48,10 @@ async def guardar_reservada(clase, fecha_clase):
 
 async def main():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, slow_mo=0)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox"]
+        )
         context = await browser.new_context()
         page = await context.new_page()
 
@@ -68,7 +71,7 @@ async def main():
 
         # --- Esperar a que cargue el perfil ---
         try:
-            await page.wait_for_selector("div#ctl00_divProfile", timeout=15000)
+            await page.wait_for_selector("div#ctl00_divProfile", timeout=30000)
             print("✅ Login completado correctamente")
         except:
             print("❌ No se pudo iniciar sesión")
@@ -217,9 +220,8 @@ async def main():
                 print(f"❌ No se pudo reservar la clase '{nombre} {hora}'.", e)
                 return False
 
-        # --- Espera inteligente hasta que falten exactamente 49 horas para la próxima clase ---
+        # --- Espera inteligente con polling cada segundo hasta que falten exactamente 49 horas para la próxima clase ---
         ahora = datetime.datetime.now()
-        # Filtra solo las clases cuya apertura aún no ha pasado
         proximas_fechas = [
             proxima_fecha(clase["dia"], clase["hora"])
             for clase in CLASES
@@ -228,12 +230,18 @@ async def main():
         if proximas_fechas:
             fecha_proxima_clase = min(proximas_fechas)
             hora_apertura = fecha_proxima_clase - datetime.timedelta(hours=49)
-            tiempo_espera = (hora_apertura - ahora).total_seconds()
-            horas = int(tiempo_espera // 3600)
-            minutos = int((tiempo_espera % 3600) // 60)
-            print(f"⏳ Esperando {horas} horas y {minutos} minutos hasta que falten 49 horas para la próxima clase ({fecha_proxima_clase.strftime('%d/%m/%Y %H:%M')})...")
-            print(f"🕒 Podrás reservar la clase el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
-            await asyncio.sleep(tiempo_espera)
+            while True:
+                ahora = datetime.datetime.now()
+                tiempo_espera = (hora_apertura - ahora).total_seconds()
+                if tiempo_espera <= 0:
+                    print("🔔 Ya estamos dentro de la ventana de 49 horas para reservar la próxima clase.")
+                    print(f"🕒 Podrás reservar la clase desde el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
+                    break
+                horas = int(tiempo_espera // 3600)
+                minutos = int((tiempo_espera % 3600) // 60)
+                segundos = int(tiempo_espera % 60)
+                print(f"⏳ Esperando {horas}h {minutos}m {segundos}s...", flush=True)
+                await asyncio.sleep(0.1)
         else:
             print("🔔 Ya estamos dentro de la ventana de 49 horas para reservar la próxima clase.")
             print(f"🕒 Podrías reservar desde el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
