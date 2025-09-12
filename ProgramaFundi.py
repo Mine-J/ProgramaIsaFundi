@@ -49,7 +49,7 @@ async def guardar_reservada(clase, fecha_clase):
 async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=False,
+            headless=True,
             args=["--no-sandbox", "--disable-setuid-sandbox"]
         )
         context = await browser.new_context()
@@ -160,74 +160,74 @@ async def main():
                 print("❌ No se pudo hacer click en 'Oferta de actividades por día y centro'.", e)
 
         async def reservar_clase(page, nombre, hora):
-            slot = page.locator(
-                f"div.panel-body:has(h4.media-heading:text-is('{nombre}')) li.media:has(h4.media-heading:text-is('{hora}'))"
-            )
+            # Busca todos los paneles de clase
+            panels = page.locator("div.panel-body")
+            count_panels = await panels.count()
 
-            # Obtener el elemento (puede haber varios, entonces iteramos)
-            count = await slot.count()
-            for i in range(count):
-                elemento = await slot.nth(i).element_handle()
-                if elemento:
-                    span_plazas = await elemento.query_selector("span")
-                    if span_plazas:
-                        plazas_texto = await span_plazas.inner_text()
-                        if plazas_texto.strip() == "0":
-                            continue  # saltar si no hay plazas
-                        print(f"🎉 Clase '{nombre} {hora}' disponible!")
-                        # Aquí ya puedes reservar o guardar la clase
-                        break
+            for i in range(count_panels):
+                panel = panels.nth(i)
+                nombre_web = await panel.locator("h4.media-heading").first.inner_text()
+                if nombre_web.strip().lower() != nombre.strip().lower():
+                    continue  # Este no es el panel correcto
 
+                # Este es el panel correcto, busca slots por hora
+                slots = panel.locator(f"li.media:has(h4.media-heading:text-is('{hora}'))")
+                count_slots = await slots.count()
+                for j in range(count_slots):
+                    elemento = slots.nth(j)
+                    span = await elemento.locator("span").first
+                    plazas_texto = await span.inner_text()
+                    if plazas_texto.strip() == "0":
+                        continue  # saltar si no hay plazas
+                    print(f"🎉 Clase '{nombre} {hora}' disponible!")
 
-
-
-            try:
-                await page.wait_for_selector(selector_clase, timeout=5000)
-                await page.click(selector_clase)
-                print(f"✅ Clase '{nombre} {hora}' seleccionada.")
-                boton_confirmar = "button#ContentFixedSection_uCarritoConfirmar_btnConfirmCart"
-                try:
-                    await page.wait_for_selector(boton_confirmar, timeout=5000)
-                    await page.click(boton_confirmar)
-                except Exception:
-                    print("⚠️ No hay botón de confirmar, puede que ya esté reservada o no disponible.")
-                    return False
-
-                try:
-                    await page.wait_for_selector("div.alert-danger", timeout=2000)
-                    print("❌ Mensaje en rojo detectado: clase ya reservada o no disponible. Sigo con el flujo.")
-                except Exception:
-                    print("✅ No hay mensaje en rojo, la reserva probablemente fue correcta.")
-
-                try:
-                    boton_salir = "a.btn.btn-default[href='../../Home']"
-                    await page.wait_for_selector(boton_salir, timeout=5000)
-                    await page.click(boton_salir)
-                    print("🔄 Has vuelto a la página principal.")
-                except Exception:
-                    await page.goto("https://deportesweb.madrid.es/DeportesWeb/Home")
-                    print("🔄 Has vuelto a la página principal (por URL).")
-
-                selector_home = "div#ctl00_divProfile"
-                max_intentos = 5
-                intento = 0
-                while intento < max_intentos:
+                    # Reservar
+                    await elemento.click()
                     try:
-                        await page.wait_for_selector(selector_home, timeout=60000)
-                        print("🏠 Página Home cargada correctamente.")
-                        break
+                        boton_confirmar = "button#ContentFixedSection_uCarritoConfirmar_btnConfirmCart"
+                        await page.click(boton_confirmar)
                     except Exception:
-                        intento += 1
-                        print(f"⏳ Intento {intento}/{max_intentos}: aún no está la Home...")
-                else:
-                    print("❌ No se pudo cargar la página Home después de varios intentos. Saliendo...")
-                    return False
+                        print("⚠️ No hay botón de confirmar, puede que ya esté reservada o no disponible.")
 
-                await volver_a_fundi_y_actividades(page)
-                return True
-            except Exception as e:
-                print(f"❌ No se pudo reservar la clase '{nombre} {hora}'.", e)
-                return False
+                    # Mensaje en rojo si la reserva falla
+                    try:
+                        await page.wait_for_selector("div.alert-danger", timeout=2000)
+                        print("❌ Mensaje en rojo detectado: clase ya reservada o no disponible. Sigo con el flujo.")
+                        return False
+                    except Exception:
+                        print("✅ No hay mensaje en rojo, la reserva probablemente fue correcta.")
+
+                    # Salir y volver a la Home
+                    try:
+                        boton_salir = "a.btn.btn-default[href='../../Home']"
+                        await page.wait_for_selector(boton_salir, timeout=5000)
+                        await page.click(boton_salir)
+                        print("🔄 Has vuelto a la página principal.")
+                    except Exception:
+                        await page.goto("https://deportesweb.madrid.es/DeportesWeb/Home")
+                        print("🔄 Has vuelto a la página principal (por URL).")
+
+                    # Esperar a que cargue la Home
+                    selector_home = "div#ctl00_divProfile"
+                    max_intentos = 5
+                    intento = 0
+                    while intento < max_intentos:
+                        try:
+                            await page.wait_for_selector(selector_home, timeout=60000)
+                            print("🏠 Página Home cargada correctamente.")
+                            break
+                        except Exception:
+                            intento += 1
+                            print(f"⏳ Intento {intento}/{max_intentos}: aún no está la Home...")
+                    else:
+                        print("❌ No se pudo cargar la página Home después de varios intentos. Saliendo...")
+                        return False
+
+                    await volver_a_fundi_y_actividades(page)
+                    return True
+
+            print(f"⏭ No se encontró la clase '{nombre} {hora}' disponible.")
+            return False
 
         
         proximas_fechas = [
@@ -280,6 +280,6 @@ async def main():
 
             except Exception as e:
                 print("⚠️ Error en el intento, reintentando...", e)
-                await asyncio.sleep(2)
+                
 
 asyncio.run(main())
