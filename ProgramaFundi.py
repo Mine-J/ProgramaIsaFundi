@@ -49,7 +49,7 @@ async def guardar_reservada(clase, fecha_clase):
 async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,
             args=["--no-sandbox", "--disable-setuid-sandbox"]
         )
         context = await browser.new_context()
@@ -93,6 +93,7 @@ async def main():
             await page.wait_for_selector(selector_actividades, timeout=5000)
             await page.click(selector_actividades)
             print("✅ Click correcto en 'Oferta de actividades por día y centro'.")
+            print(f"🕒 Hora actual: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", flush=True)
         except Exception as e:
             print("❌ No se pudo hacer click en 'Oferta de actividades por día y centro'.", e)
 
@@ -159,18 +160,26 @@ async def main():
                 print("❌ No se pudo hacer click en 'Oferta de actividades por día y centro'.", e)
 
         async def reservar_clase(page, nombre, hora):
-            selector_clase = f"li.media:has(h4.media-heading:has-text('{hora}'))"
-            try:
-                elemento = await page.query_selector(selector_clase)
+            slot = page.locator(
+                f"div.panel-body:has(h4.media-heading:text-is('{nombre}')) li.media:has(h4.media-heading:text-is('{hora}'))"
+            )
+
+            # Obtener el elemento (puede haber varios, entonces iteramos)
+            count = await slot.count()
+            for i in range(count):
+                elemento = await slot.nth(i).element_handle()
                 if elemento:
                     span_plazas = await elemento.query_selector("span")
                     if span_plazas:
                         plazas_texto = await span_plazas.inner_text()
                         if plazas_texto.strip() == "0":
-                            print(f"⏭ Clase '{nombre} {hora}' sin plazas disponibles, saltando...")
-                            return False
-            except Exception as e:
-                print("⚠️ Error al comprobar plazas, intentando reservar de todas formas", e)
+                            continue  # saltar si no hay plazas
+                        print(f"🎉 Clase '{nombre} {hora}' disponible!")
+                        # Aquí ya puedes reservar o guardar la clase
+                        break
+
+
+
 
             try:
                 await page.wait_for_selector(selector_clase, timeout=5000)
@@ -220,99 +229,57 @@ async def main():
                 print(f"❌ No se pudo reservar la clase '{nombre} {hora}'.", e)
                 return False
 
-        # --- Espera inteligente con polling cada segundo hasta que falten exactamente 49 horas para la próxima clase ---
-        ahora = datetime.datetime.now()
+        
         proximas_fechas = [
             proxima_fecha(clase["dia"], clase["hora"])
             for clase in CLASES
-            if (proxima_fecha(clase["dia"], clase["hora"]) - datetime.timedelta(hours=49)) > ahora
         ]
-        if proximas_fechas:
-            fecha_proxima_clase = min(proximas_fechas)
-            hora_apertura = fecha_proxima_clase - datetime.timedelta(hours=49)
-            while True:
-                ahora = datetime.datetime.now()
-                tiempo_espera = (hora_apertura - ahora).total_seconds()
-                if tiempo_espera <= 0:
-                    print("🔔 Ya estamos dentro de la ventana de 49 horas para reservar la próxima clase.")
-                    print(f"🕒 Podrás reservar la clase desde el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
-                    break
-                horas = int(tiempo_espera // 3600)
-                minutos = int((tiempo_espera % 3600) // 60)
-                segundos = int(tiempo_espera % 60)
-                print(f"⏳ Esperando {horas}h {minutos}m {segundos}s...", flush=True)
-                await asyncio.sleep(0.1)
-        else:
-            print("🔔 Ya estamos dentro de la ventana de 49 horas para reservar la próxima clase.")
-            print(f"🕒 Podrías reservar desde el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
+        fecha_proxima_clase = min(proximas_fechas)
+        hora_apertura = fecha_proxima_clase - datetime.timedelta(hours=49)
 
-        # --- Bucle sobre todas las clases durante 1 minutos ---
-        tiempo_limite_global = datetime.datetime.now() + datetime.timedelta(minutes=1)
-        clase_reservada = False
+        print(f"📅 Próxima clase: {fecha_proxima_clase.strftime('%d/%m/%Y %H:%M')}")
+        print(f"🔓 Se desbloquea el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
 
-        while datetime.datetime.now() < tiempo_limite_global:
+        # --- Seleccionar el día en el calendario antes de esperar ---
+        await seleccionar_dia(page, fecha_proxima_clase)
+
+        # --- Esperar hasta desbloqueo ---
+        while True:
             ahora = datetime.datetime.now()
-            reservadas = await cargar_reservadas()
-            clases_pendientes = 0  # Contador de clases que se pueden intentar
+            if ahora >= hora_apertura:
+                print("✅ Ya se desbloqueó la reserva, empezamos a intentar en bucle...")
+                break
+            else:
+                faltan = (hora_apertura - ahora).total_seconds()
+                if faltan > 45 * 60:
+                    print("⏹️ Queda más de 45 minutos para el desbloqueo. Terminando el programa.")
+                    await browser.close()
+                    return
+                h = int(faltan // 3600)
+                m = int((faltan % 3600) // 60)
+                s = int(faltan % 60)
+                print(f"⏳ Esperando desbloqueo: {h}h {m}m {s}s...", flush=True)
+                await asyncio.sleep(1)
 
-            for clase in CLASES:
-                fecha_clase = proxima_fecha(clase["dia"], clase["hora"])
-                clase_con_fecha = dict(clase)
-                clase_con_fecha["fecha"] = fecha_clase.strftime("%Y-%m-%d")
+        # --- Intentar hasta conseguir la reserva ---
+        while True:
+            try:
+                for clase in CLASES:
+                    fecha_clase = proxima_fecha(clase["dia"], clase["hora"])
+                    if fecha_clase != fecha_proxima_clase:
+                        continue
 
-                def ya_reservada(clase, fecha_clase, reservadas):
-                    for reservada in reservadas:
-                        if reservada["nombre"].lower() == clase["nombre"].lower() and reservada["hora"] == clase["hora"]:
-                            fecha_reservada = datetime.datetime.strptime(reservada["fecha"], "%Y-%m-%d")
-                            if abs((fecha_clase - fecha_reservada).days) < 7:
-                                return True
-                    return False
+                    exito = await reservar_clase(page, clase["nombre"], clase["hora"])
+                    if exito:
+                        await guardar_reservada(clase, fecha_clase)
+                        print(f"🎉 Clase '{clase['nombre']} {clase['hora']}' reservada correctamente")
+                        await browser.close()
+                        return 0
 
-                if clase_con_fecha in reservadas or ya_reservada(clase, fecha_clase, reservadas):
-                    continue
+                
 
-                horas_hasta_clase = (fecha_clase - ahora).total_seconds() / 3600
-
-                if 0 <= horas_hasta_clase <= 49:
-                    clases_pendientes += 1
-                    selector_clase = f"li.media:has(h4.media-heading:has-text('{clase['hora']}'))"
-                    try:
-                        await seleccionar_dia(page, fecha_clase)
-                        elemento = await page.query_selector(selector_clase)
-                        if elemento:
-                            span_plazas = await elemento.query_selector("span")
-                            if span_plazas:
-                                plazas_texto = await span_plazas.inner_text()
-                                if plazas_texto.strip() == "0":
-                                    print(f"⏭ Clase '{clase['nombre']} {clase['hora']}' sin plazas disponibles, pasando a la siguiente clase...")
-                                    continue
-                            # Extraer el nombre real de la clase desde el HTML
-                            nombre_web = await elemento.evaluate("el => el.closest('.panel-body').querySelector('.media-body .media-heading').innerText")
-                            if nombre_web.strip().lower() != clase["nombre"].strip().lower():
-                                print(f"⏭ Nombre en la web ('{nombre_web.strip()}') no coincide con el deseado ('{clase['nombre']}'), saltando...")
-                                continue
-                        exito = await reservar_clase(page, clase["nombre"], clase["hora"])
-                        if exito:
-                            await guardar_reservada(clase, fecha_clase)
-                            clase_reservada = True
-                            print(f"✅ Clase '{clase['nombre']} {clase['hora']}' reservada correctamente. Cerrando programa.")
-                            await browser.close()
-                            return 0
-                    except Exception as e:
-                        print(f"⚠️ Error comprobando plazas para '{clase['nombre']} {clase['hora']}':", e)
-                else:
-                    continue
-
-            # Si no hay clases pendientes, termina el programa inmediatamente
-            if clases_pendientes == 0:
-                print("✅ No hay ninguna clase pendiente para reservar. Cerrando programa.")
-                await browser.close()
-                return 0
-
-            await asyncio.sleep(2)  # Espera corta antes de volver a recorrer todas las clases
-
-        print("⏹ No se pudo reservar ninguna clase en 2 minutos. Cerrando programa.")
-        await browser.close()
-        return 0
+            except Exception as e:
+                print("⚠️ Error en el intento, reintentando...", e)
+                await asyncio.sleep(2)
 
 asyncio.run(main())
