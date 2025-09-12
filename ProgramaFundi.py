@@ -102,10 +102,13 @@ async def main():
         CLASES = [
             {"dia": "lunes", "hora": "16:30", "nombre": "Fitness"},
             {"dia": "lunes", "hora": "17:30", "nombre": "Entrenamiento en suspensión"},
-            {"dia": "lunes", "hora": "18:30", "nombre": "Yoga"},
+            {"dia": "lunes", "hora": "18:30", "nombre": "Fuerza CORE"},
+            {"dia": "martes", "hora": "15:45", "nombre": "Fuerza en sala multitrabajo"},
             {"dia": "martes", "hora": "17:30", "nombre": "Fitness"},
             {"dia": "miércoles", "hora": "16:30", "nombre": "Fitness"},
             {"dia": "miércoles", "hora": "17:30", "nombre": "Entrenamiento en suspensión"},
+            {"dia": "miércoles", "hora": "18:30", "nombre": "Fuerza CORE"},
+            {"dia": "jueves", "hora": "15:45", "nombre": "Fuerza en sala multitrabajo"},
             {"dia": "jueves", "hora": "17:30", "nombre": "Fitness"},
             {"dia": "viernes", "hora": "15:30", "nombre": "Pilates MesD"},
             {"dia": "viernes", "hora": "16:30", "nombre": "Funcional MesD"}

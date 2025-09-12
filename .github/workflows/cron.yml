@@ -2,17 +2,23 @@ name: Reservas Deportes
 
 on:
   schedule:
-    # Madrid (hora local) → UTC (resta 2 horas)
-    # Sábado a las 15:29, 16:29 y 17:29 (Madrid) → 13:29, 14:29 y 15:29 (UTC)
-    - cron: "15 13,14,15 * * 6"
-    # Domingo a las 16:29 (Madrid) → 14:29 (UTC)
-    - cron: "15 14 * * 0"
-    # Lunes a las 15:29 y 16:29 (Madrid) → 13:29 y 14:29 (UTC)
-    - cron: "15 13,14 * * 1"
-    # Martes a las 16:29 (Madrid) → 14:29 (UTC)
-    - cron: "15 14 * * 2"
-    # Miércoles a las 14:29 y 15:29 (Madrid) → 12:29 y 13:29 (UTC)
-    - cron: "15 12,13 * * 3"
+    # Lunes
+    - cron: "45 13 * * 1"  # 16:30 Madrid -45min → 13:45 UTC
+    - cron: "45 14 * * 1"  # 17:30 Madrid -45min → 14:45 UTC
+    - cron: "45 15 * * 1"  # 18:30 Madrid -45min → 15:45 UTC
+    # Martes
+    - cron: "0 13 * * 2"   # 15:45 Madrid -45min → 13:00 UTC
+    - cron: "45 14 * * 2"  # 17:30 Madrid -45min → 14:45 UTC
+    # Miércoles
+    - cron: "45 13 * * 3"  # 16:30 Madrid -45min → 13:45 UTC
+    - cron: "45 14 * * 3"  # 17:30 Madrid -45min → 14:45 UTC
+    - cron: "45 15 * * 3"  # 18:30 Madrid -45min → 15:45 UTC
+    # Jueves
+    - cron: "0 13 * * 4"   # 15:45 Madrid -45min → 13:00 UTC
+    - cron: "45 14 * * 4"  # 17:30 Madrid -45min → 14:45 UTC
+    # Viernes
+    - cron: "45 12 * * 5"  # 15:30 Madrid -45min → 12:45 UTC
+    - cron: "45 13 * * 5"  # 16:30 Madrid -45min → 13:45 UTC
 
   # Permite lanzarlo manualmente desde GitHub (Actions → Run workflow)
   workflow_dispatch:
