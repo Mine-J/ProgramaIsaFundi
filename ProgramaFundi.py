@@ -49,7 +49,7 @@ async def guardar_reservada(clase, fecha_clase):
 async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,
             args=["--no-sandbox", "--disable-setuid-sandbox"]
         )
         context = await browser.new_context()
@@ -178,7 +178,7 @@ async def main():
                 count_slots = await slots.count()
                 for j in range(count_slots):
                     elemento = slots.nth(j)
-                    span = await elemento.locator("span").first
+                    span = elemento.locator("span").first
                     plazas_texto = await span.inner_text()
                     if plazas_texto.strip() == "0":
                         continue  # saltar si no hay plazas
@@ -233,9 +233,30 @@ async def main():
             return False
 
         
+        # --- Cargar clases reservadas recientes ---
+        reservadas = await cargar_reservadas()
+
+        # --- Filtrar las clases que ya están reservadas ---
+        CLASES_PENDIENTES = [
+            clase for clase in CLASES
+            if not any(
+                r["nombre"] == clase["nombre"] and
+                r["hora"] == clase["hora"] and
+                r["fecha"] == proxima_fecha(clase["dia"], clase["hora"]).strftime("%Y-%m-%d")
+                for r in reservadas
+            )
+        ]
+
+        # --- Si no hay clases pendientes, termina el programa ---
+        if not CLASES_PENDIENTES:
+            print("⏹️ No hay ninguna clase pendiente para reservar. Cerrando programa.")
+            await browser.close()
+            return
+
+        # --- Calcular la próxima clase a reservar ---
         proximas_fechas = [
             proxima_fecha(clase["dia"], clase["hora"])
-            for clase in CLASES
+            for clase in CLASES_PENDIENTES
         ]
         fecha_proxima_clase = min(proximas_fechas)
         hora_apertura = fecha_proxima_clase - datetime.timedelta(hours=49)
@@ -267,7 +288,7 @@ async def main():
         # --- Intentar hasta conseguir la reserva ---
         while True:
             try:
-                for clase in CLASES:
+                for clase in CLASES_PENDIENTES:
                     fecha_clase = proxima_fecha(clase["dia"], clase["hora"])
                     if fecha_clase != fecha_proxima_clase:
                         continue
@@ -279,10 +300,9 @@ async def main():
                         await browser.close()
                         return 0
 
-                
-
             except Exception as e:
                 print("⚠️ Error en el intento, reintentando...", e)
+                await asyncio.sleep(2)
                 
 
 asyncio.run(main())
