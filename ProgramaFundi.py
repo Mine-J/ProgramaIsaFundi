@@ -283,7 +283,7 @@ async def main():
                 m = int((faltan % 3600) // 60)
                 s = int(faltan % 60)
                 print(f"⏳ Esperando desbloqueo: {h}h {m}m {s}s...", flush=True)
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.1)
 
         # --- Intentar hasta conseguir la reserva ---
         while True:
