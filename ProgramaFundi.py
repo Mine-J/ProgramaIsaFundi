@@ -259,7 +259,7 @@ async def main():
                 r["fecha"] == proxima_fecha(clase["dia"], clase["hora"]).strftime("%Y-%m-%d")
                 for r in reservadas
             )
-            and ahora >= proxima_fecha(clase["dia"], clase["hora"]) - datetime.timedelta(hours=51)
+            and ahora >= proxima_fecha(clase["dia"], clase["hora"]) - datetime.timedelta(hours=50)
         ]
 
         # --- Si no hay clases pendientes, termina el programa ---
