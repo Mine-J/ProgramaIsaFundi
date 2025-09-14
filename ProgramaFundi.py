@@ -6,9 +6,10 @@ import datetime
 import json
 from motor.motor_asyncio import AsyncIOMotorClient
 
+
 # --- Cargar variables del .env primero ---
 load_dotenv()
-
+yaLaTienes = False
 # --- URL de MongoDB Atlas ---
 MONGO_URL = os.getenv("MONGO_URL")
 if not MONGO_URL:
@@ -163,7 +164,6 @@ async def main():
                 print("❌ No se pudo hacer click en 'Oferta de actividades por día y centro'.", e)
 
         async def reservar_clase(page, nombre, hora):
-            # Busca todos los paneles de clase
             panels = page.locator("div.panel-body")
             count_panels = await panels.count()
 
@@ -173,7 +173,6 @@ async def main():
                 if nombre_web.strip().lower() != nombre.strip().lower():
                     continue  # Este no es el panel correcto
 
-                # Este es el panel correcto, busca slots por hora
                 slots = panel.locator(f"li.media:has(h4.media-heading:text-is('{hora}'))")
                 count_slots = await slots.count()
                 for j in range(count_slots):
@@ -183,22 +182,37 @@ async def main():
                     if plazas_texto.strip() == "0":
                         continue  # saltar si no hay plazas
                     print(f"🎉 Clase '{nombre} {hora}' disponible!")
+                    # Esperar 1 segundo extra para asegurar que la hora de la web ha cambiado
+                    await asyncio.sleep(1)
+                    await elemento.click()
+                    # Espera el mensaje específico por ID
+                    try:
+                        await page.wait_for_selector("#ContentFixedSection_uAltaEventos_uAltaEventosFechas_uAlert_divAlertDanger", timeout=1000)
+                        # Extrae el texto del mensaje
+                        mensaje = await page.locator("#ContentFixedSection_uAltaEventos_uAltaEventosFechas_uAlert_spnAlertDanger").inner_text()
+                        if "no permite más de 1 reserva" in mensaje:
+                            print("❌ Ya tienes reservada esta clase. Cerrando programa.")
+                            global yaLaTienes
+                            yaLaTienes = True
+                            return 0
+                        elif "estará disponible a las" in mensaje:
+                            print(f"⏳ La clase estará disponible más tarde: {mensaje}. Sigo intentando...")
+                            return False
+                        else:
+                            print(f"❌ Mensaje inesperado: {mensaje}. Sigo con el flujo.")
+                            return False
+                    except Exception:
+                        print("✅ No hay mensaje de alerta, la reserva probablemente fue correcta.")
 
                     # Reservar
-                    await elemento.click()
+                    
                     try:
                         boton_confirmar = "button#ContentFixedSection_uCarritoConfirmar_btnConfirmCart"
                         await page.click(boton_confirmar)
                     except Exception:
                         print("⚠️ No hay botón de confirmar, puede que ya esté reservada o no disponible.")
 
-                    # Mensaje en rojo si la reserva falla
-                    try:
-                        await page.wait_for_selector("div.alert-danger", timeout=2000)
-                        print("❌ Mensaje en rojo detectado: clase ya reservada o no disponible. Sigo con el flujo.")
-                        return False
-                    except Exception:
-                        print("✅ No hay mensaje en rojo, la reserva probablemente fue correcta.")
+                    
 
                     # Salir y volver a la Home
                     try:
@@ -236,7 +250,7 @@ async def main():
         # --- Cargar clases reservadas recientes ---
         reservadas = await cargar_reservadas()
 
-        # --- Filtrar las clases que ya están reservadas ---
+        ahora = datetime.datetime.now()
         CLASES_PENDIENTES = [
             clase for clase in CLASES
             if not any(
@@ -245,6 +259,7 @@ async def main():
                 r["fecha"] == proxima_fecha(clase["dia"], clase["hora"]).strftime("%Y-%m-%d")
                 for r in reservadas
             )
+            and ahora >= proxima_fecha(clase["dia"], clase["hora"]) - datetime.timedelta(hours=50)
         ]
 
         # --- Si no hay clases pendientes, termina el programa ---
@@ -286,19 +301,36 @@ async def main():
                 await asyncio.sleep(0.1)
 
         # --- Intentar hasta conseguir la reserva ---
-        while True:
+        while CLASES_PENDIENTES:
             try:
-                for clase in CLASES_PENDIENTES:
+                for clase in list(CLASES_PENDIENTES):
                     fecha_clase = proxima_fecha(clase["dia"], clase["hora"])
-                    if fecha_clase != fecha_proxima_clase:
+                    hora_apertura_clase = fecha_clase - datetime.timedelta(hours=49)
+                    ahora = datetime.datetime.now()
+                    # Solo intenta reservar si ya está desbloqueada
+                    if ahora < hora_apertura_clase:
                         continue
 
+                    # Selecciona el día en el calendario ANTES de intentar reservar
+                    await seleccionar_dia(page, fecha_clase)
+
                     exito = await reservar_clase(page, clase["nombre"], clase["hora"])
+                    if yaLaTienes:
+                        await browser.close()
+                        return 0
                     if exito:
                         await guardar_reservada(clase, fecha_clase)
                         print(f"🎉 Clase '{clase['nombre']} {clase['hora']}' reservada correctamente")
                         await browser.close()
                         return 0
+                    else:
+                        print(f"🚫 Quitando la clase '{clase['nombre']} {clase['hora']}' de la lista de pendientes.")
+                        CLASES_PENDIENTES.remove(clase)
+                        # Si ya no quedan clases pendientes, termina aquí mismo
+                        if not CLASES_PENDIENTES:
+                            print("⏹️ No hay ninguna clase pendiente para reservar. Cerrando programa.")
+                            await browser.close()
+                            return
 
             except Exception as e:
                 print("⚠️ Error en el intento, reintentando...", e)
