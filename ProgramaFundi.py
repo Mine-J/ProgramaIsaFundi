@@ -259,7 +259,7 @@ async def main():
                 r["fecha"] == proxima_fecha(clase["dia"], clase["hora"]).strftime("%Y-%m-%d")
                 for r in reservadas
             )
-            and ahora >= proxima_fecha(clase["dia"], clase["hora"]) - datetime.timedelta(hours=50)
+            and ahora >= proxima_fecha(clase["dia"], clase["hora"]) - datetime.timedelta(hours=51)
         ]
 
         # --- Si no hay clases pendientes, termina el programa ---
@@ -268,37 +268,11 @@ async def main():
             await browser.close()
             return
 
-        # --- Calcular la próxima clase a reservar ---
-        proximas_fechas = [
-            proxima_fecha(clase["dia"], clase["hora"])
-            for clase in CLASES_PENDIENTES
-        ]
-        fecha_proxima_clase = min(proximas_fechas)
-        hora_apertura = fecha_proxima_clase - datetime.timedelta(hours=49)
+        
 
-        print(f"📅 Próxima clase: {fecha_proxima_clase.strftime('%d/%m/%Y %H:%M')}")
-        print(f"🔓 Se desbloquea el {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
+       
 
-        # --- Seleccionar el día en el calendario antes de esperar ---
-        await seleccionar_dia(page, fecha_proxima_clase)
-
-        # --- Esperar hasta desbloqueo ---
-        while True:
-            ahora = datetime.datetime.now()
-            if ahora >= hora_apertura:
-                print("✅ Ya se desbloqueó la reserva, empezamos a intentar en bucle...")
-                break
-            else:
-                faltan = (hora_apertura - ahora).total_seconds()
-                if faltan > 45 * 60:
-                    print("⏹️ Queda más de 45 minutos para el desbloqueo. Terminando el programa.")
-                    await browser.close()
-                    return
-                h = int(faltan // 3600)
-                m = int((faltan % 3600) // 60)
-                s = int(faltan % 60)
-                print(f"⏳ Esperando desbloqueo: {h}h {m}m {s}s...", flush=True)
-                await asyncio.sleep(0.1)
+       
 
         # --- Intentar hasta conseguir la reserva ---
         while CLASES_PENDIENTES:
