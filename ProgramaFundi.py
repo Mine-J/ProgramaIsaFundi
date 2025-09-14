@@ -283,6 +283,11 @@ async def main():
                     ahora = datetime.datetime.now()
                     # Solo intenta reservar si ya está desbloqueada
                     if ahora < hora_apertura_clase:
+                        tiempo_restante = hora_apertura_clase - ahora
+                        horas, resto = divmod(tiempo_restante.total_seconds(), 3600)
+                        minutos, resto = divmod(resto, 60)
+                        segundos = int(resto)
+                        print(f"⏳ Faltan {int(horas)} horas {int(minutos)} minutos y {segundos} segundos para que se abra la clase '{clase['nombre']} {clase['hora']}'")
                         continue
 
                     # Selecciona el día en el calendario ANTES de intentar reservar
