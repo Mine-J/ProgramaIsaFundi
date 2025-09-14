@@ -166,14 +166,22 @@ async def main():
         async def reservar_clase(page, nombre, hora):
             panels = page.locator("div.panel-body")
             count_panels = await panels.count()
-
+            
             for i in range(count_panels):
                 panel = panels.nth(i)
                 nombre_web = await panel.locator("h4.media-heading").first.inner_text()
                 if nombre_web.strip().lower() != nombre.strip().lower():
                     continue  # Este no es el panel correcto
+                print(nombre_web)
+                # espera hasta que haya un li.media que contenga el texto de la hora
+                try:
+                    await panel.locator(f"li.media:has-text('{hora}')").first.wait_for(timeout=10000)
+                    print("asdfasdfasdf")
+                except Exception:
+                    print(f"⏭ No se encontró la clase '{nombre} {hora}' disponible (timeout).")
+                    return False
 
-                slots = panel.locator(f"li.media:has(h4.media-heading:text-is('{hora}'))")
+                slots = panel.locator(f"li.media:has-text('{hora}')")
                 count_slots = await slots.count()
                 for j in range(count_slots):
                     elemento = slots.nth(j)
@@ -183,7 +191,18 @@ async def main():
                         continue  # saltar si no hay plazas
                     print(f"🎉 Clase '{nombre} {hora}' disponible!")
                     # Esperar 1 segundo extra para asegurar que la hora de la web ha cambiado
-                    await asyncio.sleep(1)
+                    # Obtener la hora actual del navegador
+                    hora_navegador = await page.evaluate("new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})")
+                    print(f"🕒 Hora actual del navegador: {hora_navegador}")
+                    # Solo reservar si es la hora exacta de la clase
+                    # Convertir ambas horas a objetos datetime para comparar
+                    hora_clase_dt = datetime.datetime.strptime(hora, "%H:%M")
+                    hora_navegador_dt = datetime.datetime.strptime(hora_navegador, "%H:%M")
+                    # Si la hora del navegador es menor que la hora de la clase menos 1 hora, esperar
+                    if hora_navegador_dt < (hora_clase_dt - datetime.timedelta(hours=1)):
+                        print(f"⏳ No es la hora adecuada para la clase '{nombre} {hora}'. Esperando...")
+                        continue
+                    
                     await elemento.click()
                     # Espera el mensaje específico por ID
                     try:

@@ -1,3 +1,1 @@
-lunes", "hora": "16:30", "nombre": "Fitness"},
-            {"dia": "lunes", "hora": "17:30", "nombre": "Entrenamiento en suspensión"},
-            {"dia": "lun
+await panel.wait_for_selector(f"li.media >> h4.media-heading:text('{hora}')", timeout=10000)
