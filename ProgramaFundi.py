@@ -86,13 +86,11 @@ async def guardar_reservada(clase, fecha_clase):
 async def seleccionar_dia(page, fecha):
     fecha_str = fecha.strftime("%d/%m/%Y")
     selector_dia = f"td.day[data-day='{fecha_str}']"
+    
     await page.wait_for_selector(selector_dia, state="attached", timeout=15000)
-
     dia = page.locator(selector_dia)
 
-    # Intentar click hasta que funcione o pasen X segundos
-    timeout = 10
-    for _ in range(timeout*2):
+    for _ in range(20):  # 10 segundos máximo
         try:
             if await dia.is_visible():
                 await dia.click()
@@ -101,10 +99,43 @@ async def seleccionar_dia(page, fecha):
         except:
             pass
         await asyncio.sleep(0.5)
+    else:
+        print(f"❌ No se pudo seleccionar el día {fecha_str}.")
+
 
 
 
 async def volver_a_fundi_y_actividades(page):
+    selector_fundi = "article.navigation-section-widget-collection-item h4[title='La Fundi']"
+    for _ in range(20):  # 10s máximo
+        try:
+            await page.wait_for_selector(selector_fundi, state="attached", timeout=500)
+            elemento = page.locator(selector_fundi)
+            if await elemento.is_visible():
+                await elemento.click()
+                print("✅ Click en 'La Fundi'.")
+                break
+        except:
+            pass
+        await asyncio.sleep(0.5)
+    else:
+        print("❌ No se pudo hacer click en 'La Fundi' después de esperar.")
+
+    selector_actividades = "article.navigation-section-widget-collection-item h4[title='Oferta de actividades por día y centro']"
+    for _ in range(20):
+        try:
+            await page.wait_for_selector(selector_actividades, state="attached", timeout=500)
+            elemento = page.locator(selector_actividades)
+            if await elemento.is_visible():
+                await elemento.click()
+                print("✅ Click en 'Oferta de actividades por día y centro'.")
+                break
+        except:
+            pass
+        await asyncio.sleep(0.5)
+    else:
+        print("❌ No se pudo hacer click en 'Oferta de actividades' después de esperar.")
+
     selector_fundi = "article.navigation-section-widget-collection-item h4[title='La Fundi']"
     try:
         await page.wait_for_selector(selector_fundi, timeout=5000)
