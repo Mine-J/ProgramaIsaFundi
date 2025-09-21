@@ -86,14 +86,22 @@ async def guardar_reservada(clase, fecha_clase):
 async def seleccionar_dia(page, fecha):
     fecha_str = fecha.strftime("%d/%m/%Y")
     selector_dia = f"td.day[data-day='{fecha_str}']"
-    try:
-        await page.wait_for_selector(selector_dia, state="visible", timeout=10000)
-        dia = page.locator(selector_dia)
-        await dia.scroll_into_view_if_needed()
-        await dia.click()
-        print(f"✅ Día seleccionado en el calendario: {fecha_str}")
-    except Exception as e:
-        print(f"❌ No se pudo seleccionar el día {fecha_str} en el calendario.", e)
+    await page.wait_for_selector(selector_dia, state="attached", timeout=15000)
+
+    dia = page.locator(selector_dia)
+
+    # Intentar click hasta que funcione o pasen X segundos
+    timeout = 10
+    for _ in range(timeout*2):
+        try:
+            if await dia.is_visible():
+                await dia.click()
+                print(f"✅ Día seleccionado en el calendario: {fecha_str}")
+                break
+        except:
+            pass
+        await asyncio.sleep(0.5)
+
 
 
 async def volver_a_fundi_y_actividades(page):
@@ -230,6 +238,7 @@ async def main():
         await page.fill("input[name='ctl00$ContentFixedSection$uLogin$txtContrasena']", PASSWORD)
         await page.click("button#ContentFixedSection_uLogin_btnLogin")
         print("⌛ Login enviado, esperando a que cargue tu perfil...")
+        await asyncio.sleep(5)
 
         try:
             await page.wait_for_selector("div#ctl00_divProfile", timeout=30000)
