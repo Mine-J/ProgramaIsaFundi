@@ -87,11 +87,14 @@ async def seleccionar_dia(page, fecha):
     fecha_str = fecha.strftime("%d/%m/%Y")
     selector_dia = f"td.day[data-day='{fecha_str}']"
     try:
-        await page.wait_for_selector(selector_dia, timeout=5000)
-        await page.click(selector_dia)
+        await page.wait_for_selector(selector_dia, state="visible", timeout=10000)
+        dia = page.locator(selector_dia)
+        await dia.scroll_into_view_if_needed()
+        await dia.click()
         print(f"✅ Día seleccionado en el calendario: {fecha_str}")
     except Exception as e:
         print(f"❌ No se pudo seleccionar el día {fecha_str} en el calendario.", e)
+
 
 async def volver_a_fundi_y_actividades(page):
     selector_fundi = "article.navigation-section-widget-collection-item h4[title='La Fundi']"
@@ -216,12 +219,11 @@ async def main():
         await page.goto("https://deportesweb.madrid.es/DeportesWeb/login")
         print("✅ Página de login abierta")
 
-        # Intentar click inicial (opcional)
         try:
             await page.click("div.navigation-section-widget-collection-item-image-icon-square")
             print("✅ Click realizado en el div de la clase.")
         except Exception:
-            print("ℹ️ No se pudo hacer click en el div inicial (no es crítico).")
+            print("ℹ️ No se pudo hacer click en el div inicial (no crítico).")
 
         # --- Login automático ---
         await page.fill("input[name='ctl00$ContentFixedSection$uLogin$txtIdentificador']", EMAIL)
@@ -238,86 +240,71 @@ async def main():
             return
 
         # Ir a La Fundi y Oferta de actividades
-        try:
-            selector = "article.navigation-section-widget-collection-item h4[title='La Fundi']"
-            await page.wait_for_selector(selector, timeout=5000)
-            await page.click(selector)
-            print("✅ Click correcto disparado en el artículo 'La Fundi'.")
-        except Exception as e:
-            print("❌ No se pudo hacer click en el artículo 'La Fundi'.", e)
-
-        try:
-            selector_actividades = "article.navigation-section-widget-collection-item h4[title='Oferta de actividades por día y centro']"
-            await page.wait_for_selector(selector_actividades, timeout=5000)
-            await page.click(selector_actividades)
-            print("✅ Click correcto en 'Oferta de actividades por día y centro'.")
-            print(f"🕒 Hora actual: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", flush=True)
-        except Exception as e:
-            print("❌ No se pudo hacer click en 'Oferta de actividades por día y centro'.", e)
+        await volver_a_fundi_y_actividades(page)
 
         # --- Cargar clases reservadas recientes ---
         reservadas = await cargar_reservadas()
         ahora = datetime.datetime.now()
 
-        descartadas = set()  # (nombre, hora, fecha)
+        # --- Crear lista de candidatas ---
+        candidatas = []
+        for clase in CLASES:
+            fecha_clase = proxima_fecha(clase["dia"], clase["hora"])
+            hora_apertura = fecha_clase - datetime.timedelta(hours=49)
 
-        while True:
-            # --- Crear lista de candidatas con su hora de apertura ---
-            candidatas = []
-            for clase in CLASES:
-                fecha_clase = proxima_fecha(clase["dia"], clase["hora"])
-                hora_apertura = fecha_clase - datetime.timedelta(hours=49)
-                fecha_str = fecha_clase.strftime("%Y-%m-%d")
+            ya = any(
+                r["nombre"] == clase["nombre"] and
+                r["hora"] == clase["hora"] and
+                r["fecha"] == fecha_clase.strftime("%Y-%m-%d")
+                for r in reservadas
+            )
+            if ya or ahora > fecha_clase:
+                continue
 
-                ya = any(
-                    r["nombre"] == clase["nombre"] and
-                    r["hora"] == clase["hora"] and
-                    r["fecha"] == fecha_str
-                    for r in reservadas
-                )
+            candidatas.append((hora_apertura, clase, fecha_clase))
 
-                if ya or (clase["nombre"], clase["hora"], fecha_str) in descartadas:
-                    continue
-                if ahora < fecha_clase:
-                    candidatas.append((hora_apertura, clase, fecha_clase))
+        if not candidatas:
+            print("⏹️ No hay clases próximas para reservar. Cerrando programa.")
+            await browser.close()
+            return
 
-            if not candidatas:
-                print("⏹️ No hay más clases próximas para reservar. Cerrando programa.")
-                await browser.close()
-                return
+        # --- Ordenar clases: abiertas primero, luego próximas a abrir ---
+        abiertas = [c for c in candidatas if c[0] <= ahora]
+        no_abiertas = [c for c in candidatas if c[0] > ahora]
 
-            # Separar entre clases ya abiertas y no abiertas
-            abiertas = [c for c in candidatas if c[0] <= ahora]
-            no_abiertas = [c for c in candidatas if c[0] > ahora]
-
+        while abiertas or no_abiertas:
             if abiertas:
                 abiertas.sort(key=lambda x: x[0])
-                hora_apertura, clase_objetivo, fecha_clase = abiertas[0]
+                hora_apertura, clase_objetivo, fecha_clase = abiertas.pop(0)
+                print(f"🎯 Clase ya abierta: {clase_objetivo['nombre']} {clase_objetivo['hora']}")
             else:
                 no_abiertas.sort(key=lambda x: x[0])
-                hora_apertura, clase_objetivo, fecha_clase = no_abiertas[0]
-
-            print(f"🎯 Próxima clase a reservar: {clase_objetivo['nombre']} {clase_objetivo['hora']}")
-            print(f"    Fecha de la clase: {fecha_clase.strftime('%d/%m/%Y %H:%M')}")
-            print(f"    Se abre (49h antes): {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
-
-            # Seleccionar día en el calendario
-            await seleccionar_dia(page, fecha_clase)
-            await page.wait_for_selector(f"div.panel-body h4.media-heading:text('{clase_objetivo['nombre']}')", timeout=15000)
-
-            # Esperar hasta la hora de apertura si toca
-            ahora = datetime.datetime.now()
-            if ahora < hora_apertura:
+                hora_apertura, clase_objetivo, fecha_clase = no_abiertas.pop(0)
+                ahora = datetime.datetime.now()
                 espera = (hora_apertura - ahora).total_seconds()
-                print(f"⏳ Esperando {int(espera)} segundos hasta la apertura ({hora_apertura.strftime('%d/%m %H:%M:%S')})...")
-                await asyncio.sleep(espera)
+                if espera > 0:
+                    horas, resto = divmod(int(espera), 3600)
+                    minutos, segundos = divmod(resto, 60)
+                    print(f"⏳ Esperando {horas:02d}:{minutos:02d}:{segundos:02d} hasta la apertura ({hora_apertura.strftime('%d/%m/%Y %H:%M')})...")
+                    await asyncio.sleep(espera)
+                print(f"🎯 Próxima clase a abrir: {clase_objetivo['nombre']} {clase_objetivo['hora']}")
 
-            # Intentar reservar durante 1 minuto
+            # Seleccionar día
+            await seleccionar_dia(page, fecha_clase)
+
+            # Esperar que los paneles carguen
+            try:
+                await page.wait_for_selector("div.panel-body h4.media-heading", timeout=20000)
+            except Exception:
+                print("⚠️ Paneles no cargaron correctamente, intentando volver a 'La Fundi'...")
+                await volver_a_fundi_y_actividades(page)
+                await seleccionar_dia(page, fecha_clase)
+                await page.wait_for_selector("div.panel-body h4.media-heading", timeout=20000)
+
+            # Intentar reservar la clase
             tiempo_total_intento = 60
             deadline = datetime.datetime.now() + datetime.timedelta(seconds=tiempo_total_intento)
-            print(f"🚀 Intentando reservar {clase_objetivo['nombre']} {clase_objetivo['hora']} durante {tiempo_total_intento}s...")
-
-            intento_exitoso = False
+            reservado = False
 
             while datetime.datetime.now() < deadline:
                 estado = await reservar_clase(page, clase_objetivo["nombre"], clase_objetivo["hora"])
@@ -325,32 +312,30 @@ async def main():
                 if estado == "RESERVADA":
                     await guardar_reservada(clase_objetivo, fecha_clase)
                     print(f"🎉 Clase '{clase_objetivo['nombre']} {clase_objetivo['hora']}' reservada correctamente")
-                    intento_exitoso = True
+                    reservado = True
                     break
-
-                elif estado in ["PLAZAS_0", "YA_TIENE"]:
-                    print(f"⚠️ Clase {clase_objetivo['nombre']} descartada ({estado}). Pasando a la siguiente...")
-                    descartadas.add((clase_objetivo["nombre"], clase_objetivo["hora"], fecha_clase.strftime("%Y-%m-%d")))
+                elif estado == "PLAZAS_0":
+                    print(f"⚠️ Clase {clase_objetivo['nombre']} {clase_objetivo['hora']} descartada (PLAZAS_0). Pasando a la siguiente...")
                     break
-
+                elif estado == "YA_TIENE":
+                    print("⚠️ El sistema indica que ya tienes una clase incompatible. Pasando a la siguiente...")
+                    break
                 elif estado == "NO_ABIERTA":
                     print("⏳ La clase todavía no está abierta. Reintentando...")
-
                 elif estado == "NO_ENCONTRADA":
                     print("⚠️ Clase no encontrada todavía, refrescando el día...")
                     await seleccionar_dia(page, fecha_clase)
-                    await page.wait_for_selector(f"div.panel-body h4.media-heading:text('{clase_objetivo['nombre']}')", timeout=10000)
-
+                    await asyncio.sleep(1)
                 else:
                     print("⚠️ Estado inesperado:", estado, " — reintentando...")
 
                 await asyncio.sleep(0.5)
 
-            if intento_exitoso:
-                # Reiniciamos la carga de reservadas y continuamos con la siguiente clase
-                reservadas = await cargar_reservadas()
-            else:
-                ahora = datetime.datetime.now()  # actualizar hora y pasar a siguiente
+            if reservado:
+                break  # Salimos si hemos reservado exitosamente
+
+        print("❌ No se consiguieron reservar más clases o todas fueron descartadas.")
+        await browser.close()
 
 
 if __name__ == "__main__":
