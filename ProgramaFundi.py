@@ -149,7 +149,7 @@ class WebNavigator:
                 await self.page.click("div.navigation-section-widget-collection-item-image-icon-square")
                 print("✅ Click realizado en el div de la clase.")
             except Exception:
-                print("ℹ️ No se pudo hacer click en el div inicial (no crítico).")
+                print("ℹ️ No se pudo hacer click en el div inicial (no crítico).")            
             # Llenar formulario
             await self.page.fill("input[name='ctl00$ContentFixedSection$uLogin$txtIdentificador']", EMAIL)
             await self.page.fill("input[name='ctl00$ContentFixedSection$uLogin$txtContrasena']", PASSWORD)
@@ -175,6 +175,8 @@ class WebNavigator:
         except Exception as e:
             print(f"❌ Error volviendo a Home: {e}")
             return False
+    
+    async def navegar_a_actividades(self) -> bool:
         """Navega a la sección de oferta de actividades"""
         try:
             print("🔄 Navegando a 'La Fundi' > 'Oferta de actividades'...")
@@ -633,7 +635,7 @@ async def main():
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=False,  # Cambia a True para modo invisible
+            headless=True,  # Cambia a True para modo invisible
             args=["--no-sandbox", "--disable-setuid-sandbox"]
         )
         
