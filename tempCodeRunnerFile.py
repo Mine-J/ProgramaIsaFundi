@@ -1,1 +1,1 @@
-Entrenamiento en suspensión
+enamiento en suspen
