@@ -40,12 +40,10 @@ CLASES = [
     {"dia": "lunes", "hora": "17:00", "nombre": "Pilates MesD"},
     {"dia": "lunes", "hora": "18:00", "nombre": "Entrenamiento en suspensión"},
     {"dia": "martes", "hora": "15:45", "nombre": "Fuerza en sala multitrabajo"},
-    {"dia": "martes", "hora": "17:00", "nombre": "Funcional"},
     {"dia": "martes", "hora": "18:00", "nombre": "Pilates MesD"},
     {"dia": "miércoles", "hora": "18:00", "nombre": "Entrenamiento en suspensión"},
     {"dia": "miércoles", "hora": "19:00", "nombre": "Fitness"},
     {"dia": "jueves", "hora": "15:45", "nombre": "Fuerza en sala multitrabajo"},
-    {"dia": "jueves", "hora": "17:00", "nombre": "Funcional"},
     {"dia": "viernes", "hora": "15:30", "nombre": "Pilates MesD"},
     {"dia": "viernes", "hora": "16:30", "nombre": "Funcional MesD"}
 ]
