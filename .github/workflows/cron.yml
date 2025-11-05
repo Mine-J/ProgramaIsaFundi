@@ -39,8 +39,8 @@ on:
   - cron: "20 13 * * 2"   # Clase 15:45 Madrid → Ejecuta 1h45 antes (13:00 UTC)
 
   # Viernes
-  - cron: "15 13 * * 3"  # Clase 15:30 Madrid → Ejecuta 1h45 antes (12:45 UTC)
-  - cron: "05 14 * * 3"  # Clase 16:30 Madrid → Ejecuta 1h45 antes (13:45 UTC)
+  - cron: "15 13 * * 3"  # Clase 15:45 Madrid → Ejecuta 1h45 antes (12:45 UTC)
+  - cron: "30 14 * * 3"  # Clase 17:00 Madrid → Ejecuta 1h45 antes (13:45 UTC)
 
 
 

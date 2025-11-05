@@ -45,7 +45,7 @@ CLASES = [
     {"dia": "miércoles", "hora": "19:00", "nombre": "Fitness"},
     {"dia": "jueves", "hora": "15:45", "nombre": "Fuerza en sala multitrabajo"},
     {"dia": "viernes", "hora": "15:45", "nombre": "Pilates MesD"},
-    {"dia": "viernes", "hora": "16:30", "nombre": "Entrenamiento Funcional"}
+    {"dia": "viernes", "hora": "17:00", "nombre": "Entrenamiento Funcional"}
 ]
 
 DIAS_SEMANA = {
