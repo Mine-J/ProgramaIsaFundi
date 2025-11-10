@@ -41,6 +41,7 @@ CLASES = [
     {"dia": "lunes", "hora": "18:00", "nombre": "Entrenamiento en suspensión"},
     {"dia": "martes", "hora": "15:45", "nombre": "Fuerza en sala multitrabajo"},
     {"dia": "martes", "hora": "18:00", "nombre": "Pilates MesD"},
+    {"dia": "miércoles", "hora": "15:45", "nombre": "Fuerza GAP"},
     {"dia": "miércoles", "hora": "18:00", "nombre": "Entrenamiento en suspensión"},
     {"dia": "miércoles", "hora": "19:00", "nombre": "Fitness"},
     {"dia": "jueves", "hora": "15:45", "nombre": "Fuerza en sala multitrabajo"},
