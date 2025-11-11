@@ -289,8 +289,16 @@ class WebNavigator:
         """
         try:
             # Click en el slot
+            url_antes = self.page.url
             await slot.click()
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)  # Espera para que se cargue el modal o cambie la URL
+
+            # Si sigue en la misma URL, intenta hacer clic de nuevo
+            if self.page.url == url_antes:
+                print("🔁 No cambió la URL tras el clic, intentando de nuevo...")
+                await slot.click()
+                await asyncio.sleep(2)
+
             
             # Buscar botón de confirmar
             boton_confirmar = "button#ContentFixedSection_uCarritoConfirmar_btnConfirmCart"
