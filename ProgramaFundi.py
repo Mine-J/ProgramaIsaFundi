@@ -282,62 +282,66 @@ class WebNavigator:
             print(f"❌ Error buscando clase: {e}")
             return None
     
-    async def intentar_reservar_slot(self, slot):
+    async def intentar_reservar_slot(self, slot) -> str:
+        """
+        Intenta reservar un slot específico.
+        Retorna: "RESERVADA", "YA_TIENE", "NO_ABIERTA", "ERROR"
+        """
         try:
-            url_antes = self.page.url
-
-            # --- Intentos de clic en el slot ---
-            for i in range(3):
-                await slot.click()
-                await asyncio.sleep(2)  # esperar que cargue modal o cambie URL
-
-                if self.page.url != url_antes:
-                    print(f"✅ Clic registrado correctamente en intento {i+1}")
-                    break
-                else:
-                    print(f"🔁 Intento {i+1}: la URL no cambió ({self.page.url}), reintentando...")
-
-            # Si tras los intentos no cambia la URL, lo damos por error
-            if self.page.url == url_antes:
-                print("⚠️ No se detectó cambio de página tras 3 intentos de clic. Posible fallo en el slot.")
-                return "ERROR"
-
-            # --- Esperar botón de confirmar ---
+            # Click en el slot
+            await slot.click()
+            await asyncio.sleep(1)
+            
+            # Buscar botón de confirmar
             boton_confirmar = "button#ContentFixedSection_uCarritoConfirmar_btnConfirmCart"
-
+            
             try:
-                await self.page.wait_for_selector(boton_confirmar, timeout=8000)
-                await self.page.locator(boton_confirmar).click(force=True)
-                print("🖱️ Click en botón 'Confirmar' realizado")
-            except Exception as e:
-                print(f"⚠️ No se encontró el botón confirmar ({e}).")
-                # dump parcial para depurar
+                await self.page.wait_for_selector(boton_confirmar, timeout=3000)
+                await self.page.click(boton_confirmar)
+                await asyncio.sleep(2)
+                
+                # Verificar resultado
                 content = await self.page.content()
-                print("🧩 HTML parcial del fallo:", content[:800])
+                content_lower = content.lower()
+                
+                # Detectar mensajes de "ya tienes reserva"
+                mensajes_ya_tiene = [
+                    "solo puedes tener", 
+                    "ya tienes", 
+                    "sólo puedes tener",
+                    "la sesión seleccionada no permite más de 1 reserva(s) por persona"
+                ]
+                
+                if any(msg in content_lower for msg in mensajes_ya_tiene):
+                    return "YA_TIENE"
+                
+                # Si no hay error, asumimos éxito
+                return "RESERVADA"
+                
+            except PlaywrightTimeoutError:
+                # No apareció botón confirmar - verificar mensajes
+                content = await self.page.content()
+                content_lower = content.lower()
+                
+                if any(msg in content_lower for msg in ["se abre a las", "se abrirá", "no está abierta"]):
+                    return "NO_ABIERTA"
+                
+                # Detectar mensajes de "ya tienes reserva" también aquí
+                mensajes_ya_tiene = [
+                    "solo puedes tener", 
+                    "ya tienes", 
+                    "sólo puedes tener",
+                    "la sesión seleccionada no permite más de 1 reserva(s) por persona"
+                ]
+                
+                if any(msg in content_lower for msg in mensajes_ya_tiene):
+                    return "YA_TIENE"
+                
                 return "ERROR"
-
-            await asyncio.sleep(3)
-
-            # --- Verificar resultado ---
-            contenido = await self.page.content()
-
-            if "reserva confirmada" in contenido.lower():
-                print("🎉 Reserva confirmada correctamente")
-                return "OK"
-            elif any(msg in contenido.lower() for msg in ["ya tienes", "solo puedes", "sólo puedes", "no puedes reservar"]):
-                print("⚠️ Ya tienes una reserva similar o límite alcanzado")
-                return "YA_TIENE"
-            elif "no se ha podido completar" in contenido.lower():
-                print("❌ Error del sistema al confirmar la reserva")
-                return "ERROR_SISTEMA"
-
-            print("⚠️ Resultado incierto, posible fallo silencioso")
-            return "ERROR"
-
+                
         except Exception as e:
             print(f"⚠️ Error en intentar_reservar_slot: {e}")
             return "ERROR"
-
 
 # ============================================================================
 # GESTOR DE RESERVAS
