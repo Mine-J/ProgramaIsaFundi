@@ -23,25 +23,25 @@ on:
 
   schedule:
   # Lunes
+  - cron: "20 13 * * 6"   # Clase 15:45 Madrid → Ejecuta 2h05 antes (13:20 UTC)
+  - cron: "35 14 * * 6"   # Clase 17:00 Madrid → Ejecuta 2h05 antes (14:35 UTC)
+  - cron: "35 15 * * 6"   # Clase 18:00 Madrid → Ejecuta 2h05 antes (15:35 UTC)
+
+  # Martes
+  - cron: "20 13 * * 0"   # Clase 15:45 Madrid → Ejecuta 2h05 antes (13:20 UTC)
+  - cron: "35 15 * * 0"   # Clase 18:00 Madrid → Ejecuta 2h05 antes (15:35 UTC)
+
+  # Miércoles
   - cron: "20 13 * * 1"   # Clase 15:45 Madrid → Ejecuta 2h05 antes (13:20 UTC)
   - cron: "35 14 * * 1"   # Clase 17:00 Madrid → Ejecuta 2h05 antes (14:35 UTC)
   - cron: "35 15 * * 1"   # Clase 18:00 Madrid → Ejecuta 2h05 antes (15:35 UTC)
 
-  # Martes
-  - cron: "20 13 * * 2"   # Clase 15:45 Madrid → Ejecuta 2h05 antes (13:20 UTC)
-  - cron: "35 15 * * 2"   # Clase 18:00 Madrid → Ejecuta 2h05 antes (15:35 UTC)
-
-  # Miércoles
-  - cron: "20 13 * * 3"   # Clase 15:45 Madrid → Ejecuta 2h05 antes (13:20 UTC)
-  - cron: "35 14 * * 3"   # Clase 17:00 Madrid → Ejecuta 2h05 antes (14:35 UTC)
-  - cron: "35 15 * * 3"   # Clase 18:00 Madrid → Ejecuta 2h05 antes (15:35 UTC)
-
   # Jueves
-  - cron: "20 13 * * 4"   # Clase 15:45 Madrid → Ejecuta 2h05 antes (13:20 UTC)
+  - cron: "20 13 * * 2"   # Clase 15:45 Madrid → Ejecuta 2h05 antes (13:20 UTC)
 
   # Viernes
-  - cron: "25 12 * * 5"   # Clase 15:45 Madrid → Ejecuta 2h05 antes (12:25 UTC)
-  - cron: "25 13 * * 5"   # Clase 17:00 Madrid → Ejecuta 2h05 antes (13:25 UTC)
+  - cron: "25 12 * * 3"   # Clase 15:45 Madrid → Ejecuta 2h05 antes (12:25 UTC)
+  - cron: "25 13 * * 3"   # Clase 17:00 Madrid → Ejecuta 2h05 antes (13:25 UTC)
 
 
 
