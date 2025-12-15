@@ -31,9 +31,12 @@ jobs:
 
     env:
       TZ: Europe/Madrid
-      MONGO_URL: ${{ secrets.MONGO_URL }}
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
+      MONGO_URL: ${{ secrets.MONGO_URL }}
+      PERSON_CODE: ${{ secrets.PERSON_CODE }}
+      NOMBRE: ${{ secrets.NOMBRE }}
+      APELLIDOS: ${{ secrets.APELLIDOS }}
 
     steps:
       - name: Checkout code
@@ -48,6 +51,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pymongo motor
           playwright install chromium
 
       - name: Debug env
@@ -55,6 +59,9 @@ jobs:
           echo "EMAIL length: ${#EMAIL}"
           echo "PASSWORD length: ${#PASSWORD}"
           echo "MONGO_URL length: ${#MONGO_URL}"
+          echo "PERSON_CODE length: ${#PERSON_CODE}"
+          echo "NOMBRE length: ${#NOMBRE}"
+          echo "APELLIDOS length: ${#APELLIDOS}"
 
       - name: Run script
         run: python ProgramaFundi.py
