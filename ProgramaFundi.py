@@ -671,20 +671,58 @@ def finalizar_reserva(session: requests.Session, state: dict, nombre: str, apell
 # MAIN
 # =========================
 
+def extraer_person_code(html: str) -> str | None:
+    """
+    Extrae el PERSON_CODE del HTML de AltaEventos.
+    Busca patrones como:
+    - data-person-code="9c879716dbb3e6068e0ff3a82f11cbe515346dbd6b08fd84"
+    - "personCode":"9c879716dbb3e6068e0ff3a82f11cbe515346dbd6b08fd84"
+    - personCode: '9c879716dbb3e6068e0ff3a82f11cbe515346dbd6b08fd84'
+    
+    Args:
+        html: HTML de la página AltaEventos
+    
+    Returns:
+        El PERSON_CODE si lo encuentra, None en caso contrario
+    """
+    # Patrón 1: atributo data-
+    match = re.search(r'data-person-code=["\']([a-f0-9]{64})["\']', html)
+    if match:
+        return match.group(1)
+    
+    # Patrón 2: JSON con comillas dobles
+    match = re.search(r'"personCode"\s*:\s*"([a-f0-9]{64})"', html)
+    if match:
+        return match.group(1)
+    
+    # Patrón 3: JSON con comillas simples
+    match = re.search(r"'personCode'\s*:\s*'([a-f0-9]{64})'", html)
+    if match:
+        return match.group(1)
+    
+    # Patrón 4: Variable JavaScript
+    match = re.search(r'personCode\s*=\s*["\']([a-f0-9]{64})["\']', html)
+    if match:
+        return match.group(1)
+    
+    # Patrón 5: Dentro de un objeto JavaScript sin comillas
+    match = re.search(r'personCode\s*:\s*["\']?([a-f0-9]{64})["\']?', html)
+    if match:
+        return match.group(1)
+    
+    return None
+
 async def main():
     load_dotenv()
     email = os.getenv("EMAIL")
     password = os.getenv("PASSWORD")
     mongo_url = os.getenv("MONGO_URL")
-    person_code = os.getenv("PERSON_CODE")
+    person_code = os.getenv("PERSON_CODE")  # Del .env como fallback
     nombre = os.getenv("NOMBRE")
     apellidos = os.getenv("APELLIDOS")
     
     if not email or not password:
         raise ValueError("Faltan EMAIL o PASSWORD en .env")
-    
-    if not person_code:
-        raise ValueError("Falta PERSON_CODE en .env (ej: 11968794)")
     
     if not nombre or not apellidos:
         raise ValueError("Faltan NOMBRE o APELLIDOS en .env")
@@ -806,6 +844,18 @@ async def main():
     if ev_tag:
         state["__EVENTVALIDATION"] = ev_tag["value"]
     
+    # >>> NUEVO: Extraer PERSON_CODE del HTML <<>
+    extracted_person_code = extraer_person_code(alta_eventos_html)
+    if extracted_person_code:
+        print(f"✅ PERSON_CODE extraído del HTML: {extracted_person_code}")
+        person_code = extracted_person_code  # Usar el extraído
+    elif not person_code:
+        print("⚠️ No se pudo extraer PERSON_CODE del HTML ni existe en .env")
+        print("   Usando fallback: 9c879716dbb3e6068e0ff3a82f11cbe515346dbd6b08fd84")
+        person_code = "9c879716dbb3e6068e0ff3a82f11cbe515346dbd6b08fd84"
+    else:
+        print(f"✅ Usando PERSON_CODE del .env: {person_code}")
+    
     print("✅ Página AltaEventos cargada")
     
     # Separar clases abiertas y cerradas
@@ -859,8 +909,14 @@ async def main():
                     person_code=person_code,
                     state=state
                 )
-                
-                if "pageRedirect" in response_seleccion and "CarritoConfirmar" in urllib.parse.unquote(response_seleccion):
+                # Verificar si hay error de límite de reservas
+                if "La sesión seleccionada no permite más de" in response_seleccion or "no permite m&#225;s de" in response_seleccion:
+                    print(f"   ⚠️ Límite de reservas alcanzado para esta sesión")
+                    if db_manager:
+                        await db_manager.guardar_reserva(clase, fecha_clase)
+                    print(f"   💾 Clase marcada como reservada en BD")
+                elif "pageRedirect" in response_seleccion and "CarritoConfirmar" in urllib.parse.unquote(response_seleccion):
+
                     print(f"   ✅ ¡RESERVA AÑADIDA AL CARRITO!")
                     
                     url_alta_eventos = f"https://deportesweb.madrid.es/DeportesWeb/Modulos/VentaServicios/Eventos/AltaEventos?token={alta_token}"
@@ -886,6 +942,7 @@ async def main():
                         print(f"   ⚠️ Error en confirmación: {response_final[:300]}")
                 else:
                     print(f"   ❌ Error: {response_seleccion[:300]}")
+                    
             else:
                 print(f"   ⚠️ No se encontró la sesión")
     

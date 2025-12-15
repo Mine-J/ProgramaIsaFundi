@@ -34,7 +34,6 @@ jobs:
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
       MONGO_URL: ${{ secrets.MONGO_URL }}
-      PERSON_CODE: ${{ secrets.PERSON_CODE }}
       NOMBRE: ${{ secrets.NOMBRE }}
       APELLIDOS: ${{ secrets.APELLIDOS }}
 
@@ -59,7 +58,6 @@ jobs:
           echo "EMAIL length: ${#EMAIL}"
           echo "PASSWORD length: ${#PASSWORD}"
           echo "MONGO_URL length: ${#MONGO_URL}"
-          echo "PERSON_CODE length: ${#PERSON_CODE}"
           echo "NOMBRE length: ${#NOMBRE}"
           echo "APELLIDOS length: ${#APELLIDOS}"
 
