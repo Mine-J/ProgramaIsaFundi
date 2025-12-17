@@ -963,6 +963,22 @@ async def main():
         print(f"   Clase: {fecha_clase.strftime('%d/%m/%Y')} {clase['hora']}")
         print(f"   🔓 Abre: {hora_apertura.strftime('%d/%m/%Y %H:%M')}")
         
+        # 🔧 IMPORTANTE: Recargar estado ASP.NET antes de proceder
+        # Después de las reservas anteriores, el state puede estar desincronizado
+        print(f"\n   🔄 Recargando estado de seguridad ASP.NET...")
+        alta_eventos_html_refresh = get_alta_eventos(
+            session, token=alta_token,
+            referer=f"https://deportesweb.madrid.es/DeportesWeb/Centro?token={token}"
+        )
+        
+        soup_refresh = BeautifulSoup(alta_eventos_html_refresh, "html.parser")
+        state["__VIEWSTATE"] = soup_refresh.find("input", {"id": "__VIEWSTATE"})["value"]
+        state["__VIEWSTATEGENERATOR"] = soup_refresh.find("input", {"id": "__VIEWSTATEGENERATOR"})["value"]
+        ev_tag_refresh = soup_refresh.find("input", {"id": "__EVENTVALIDATION"})
+        if ev_tag_refresh:
+            state["__EVENTVALIDATION"] = ev_tag_refresh["value"]
+        print(f"   ✅ Estado recargado correctamente")
+        
         # Cargar eventos para obtener el COD_SESION antes de esperar
         response = load_events_for_date(
             session=session,
