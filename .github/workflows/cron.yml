@@ -1,29 +1,29 @@
 name: Reservas Deportes
 
 on:
-  # schedule:
+  schedule:
     
     # Lunes
-    # - cron: "20 13 * * 6"
-    # - cron: "35 14 * * 6"
-    # - cron: "35 15 * * 6"
+    - cron: "20 13 * * 6"
+    - cron: "35 14 * * 6"
+    - cron: "35 15 * * 6"
 
     # Martes
-    # - cron: "20 13 * * 0"
-    # - cron: "35 15 * * 0"
+    - cron: "20 13 * * 0"
+    - cron: "35 15 * * 0"
 
     # Miércoles
-    # - cron: "20 13 * * 1"
-    # - cron: "35 14 * * 1"
-    # - cron: "35 15 * * 1"
+    - cron: "20 13 * * 1"
+    - cron: "35 14 * * 1"
+    - cron: "35 15 * * 1"
 
     # Jueves
-    # - cron: "20 13 * * 2"
-    # - cron: "35 14 * * 2"
+    - cron: "20 13 * * 2"
+    - cron: "35 14 * * 2"
 
     # Viernes
-    # - cron: "25 12 * * 3"
-    # - cron: "25 13 * * 3"
+    - cron: "25 12 * * 3"
+    - cron: "25 13 * * 3"
 
   workflow_dispatch:
 
