@@ -67,6 +67,7 @@ class DatabaseManager:
     
     async def cargar_reservadas_recientes(self, dias_atras: int = 7):
         """Carga las clases ya reservadas para filtrarlas del plan"""
+        await self.coleccion.delete_many({"fecha": {"$lt": (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")}})
         fecha_inicio = (datetime.now() - timedelta(days=dias_atras)).strftime("%Y-%m-%d")
         cursor = self.coleccion.find({"fecha": {"$gte": fecha_inicio}})
         reservadas = await cursor.to_list(length=None)
