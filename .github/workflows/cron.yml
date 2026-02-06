@@ -2,27 +2,45 @@ name: Reservas Deportes
 
 on:
   schedule:
-    # Lunes
-    - cron: "5 13 * * 6"
-    - cron: "20 14 * * 6"
-    - cron: "20 15 * * 6"
+    # ============================================
+    # HORARIOS UTC (1 hora antes de apertura)
+    # España UTC+1 (invierno) / UTC+2 (verano)
+    # Clases abren 49h antes
+    # ============================================
 
-    # Martes
-    - cron: "5 13 * * 0"
-    - cron: "20 15 * * 0"
+    # SÁBADO (para clases del Lunes)
+    # Lunes 15:45 → abre Sáb 13:45 UTC → ejecutar 12:45 UTC
+    # Lunes 17:00 → abre Sáb 15:00 UTC → ejecutar 14:00 UTC
+    # Lunes 18:00 → abre Sáb 16:00 UTC → ejecutar 15:00 UTC
+    - cron: "45 12 * * 6"
+    - cron: "0 14 * * 6"
+    - cron: "0 15 * * 6"
 
-    # Miércoles
-    - cron: "5 13 * * 1"
-    - cron: "20 14 * * 1"
-    - cron: "20 15 * * 1"
+    # DOMINGO (para clases del Martes)
+    # Martes 15:45 → abre Dom 13:45 UTC → ejecutar 12:45 UTC
+    # Martes 17:00 → abre Dom 15:00 UTC → ejecutar 14:00 UTC
+    - cron: "45 12 * * 0"
+    - cron: "0 14 * * 0"
 
-    # Jueves
-    - cron: "5 13 * * 2"
-    - cron: "20 14 * * 2"
+    # LUNES (para clases del Miércoles)
+    # Miércoles 15:45 → abre Lun 13:45 UTC → ejecutar 12:45 UTC
+    # Miércoles 17:00 → abre Lun 15:00 UTC → ejecutar 14:00 UTC
+    # Miércoles 18:00 → abre Lun 16:00 UTC → ejecutar 15:00 UTC
+    - cron: "45 12 * * 1"
+    - cron: "0 14 * * 1"
+    - cron: "0 15 * * 1"
 
-    # Viernes
-    - cron: "10 12 * * 3"
-    - cron: "10 13 * * 3"
+    # MARTES (para clases del Jueves)
+    # Jueves 15:45 → abre Mar 13:45 UTC → ejecutar 12:45 UTC
+    # Jueves 17:00 → abre Mar 15:00 UTC → ejecutar 14:00 UTC
+    - cron: "45 12 * * 2"
+    - cron: "0 14 * * 2"
+
+    # MIÉRCOLES (para clases del Viernes)
+    # Viernes 15:45 → abre Mié 13:45 UTC → ejecutar 12:45 UTC
+    # Viernes 17:00 → abre Mié 15:00 UTC → ejecutar 14:00 UTC
+    - cron: "45 12 * * 3"
+    - cron: "0 14 * * 3"
 
   workflow_dispatch:
 
