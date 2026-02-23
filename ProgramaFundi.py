@@ -42,7 +42,7 @@ CLASES = [
     {"dia": "miércoles", "hora": "18:00", "nombre": "Entrenamiento en suspensión"},
     {"dia": "jueves", "hora": "15:45", "nombre": "Fuerza en sala multitrabajo"},
     {"dia": "viernes", "hora": "15:45", "nombre": "Pilates MesD"},
-    {"dia": "viernes", "hora": "17:00", "nombre": "Entrenamiento Funcional"}
+    {"dia": "viernes", "hora": "17:00", "nombre": "Entrenamiento Funcional"},
     {"dia": "viernes", "hora": "18:00", "nombre": "Entrenamiento en suspensión"}
 ]
 
