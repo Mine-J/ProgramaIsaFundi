@@ -14,7 +14,7 @@ on:
     # Lunes 18:00 → abre Sáb 16:00 UTC → ejecutar 14:45 UTC
     - cron: "10 12 * * 6"
     - cron: "00 13 * * 6"
-    - cron: "00 14 * * 6"
+    - cron: "30 14 * * 6"
 
     # DOMINGO (para clases del Martes)
     # Martes 15:45 → abre Dom 13:45 UTC → ejecutar 12:30 UTC
@@ -26,7 +26,7 @@ on:
     # Miércoles 18:00 → abre Lun 16:00 UTC → ejecutar 14:45 UTC
     - cron: "10 12 * * 1"
     - cron: "00 13 * * 1"
-    - cron: "00 14 * * 1"
+    - cron: "30 14 * * 1"
 
     # MARTES (para clases del Jueves)
     # Jueves 15:45 → abre Mar 13:45 UTC → ejecutar 12:30 UTC
@@ -38,7 +38,7 @@ on:
     # Viernes 18:00 → abre Mié 16:00 UTC → ejecutar 14:45 UTC
     - cron: "10 12 * * 3"
     - cron: "00 13 * * 3"
-    - cron: "00 14 * * 3"
+    - cron: "30 14 * * 3"
 
   workflow_dispatch:
 
