@@ -41,6 +41,7 @@ on:
 concurrency:
   group: reservas-deportes
   cancel-in-progress: false
+  queue: max
 
 jobs:
   run-script:

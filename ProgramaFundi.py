@@ -39,7 +39,7 @@ CLASES = [
     {"dia": "miércoles", "hora": "15:45", "nombre": "Fuerza GAP"},
     {"dia": "miércoles", "hora": "17:00", "nombre": "Entrenamiento en suspensión"},
     {"dia": "jueves", "hora": "15:45", "nombre": "Fuerza en sala multitrabajo"},
-    {"dia": "viernes", "hora": "15:45", "nombre": "Pilates MesD"},
+    {"dia": "viernes", "hora": "15:45", "nombre": "Pilates"},
     {"dia": "viernes", "hora": "17:00", "nombre": "Entrenamiento por intervalos"},
     {"dia": "viernes", "hora": "18:00", "nombre": "Entrenamiento en suspensión"}
 ]
@@ -441,52 +441,64 @@ def extraer_cod_sesion(html_response: str, nombre_clase: str, hora_clase: str, f
     return None
 
 
-def load_events_for_date(session: requests.Session, token: str, fecha: str, state: dict):
-    """Carga los eventos de una fecha específica"""
-    url_alta_eventos = f"https://deportesweb.madrid.es/DeportesWeb/Modulos/VentaServicios/Eventos/AltaEventos?token={token}"
-    
+def load_events_for_date(
+    session: requests.Session,
+    token: str,
+    fecha: str,
+    state: dict
+):
+    """Carga los eventos usando el formato capturado en el navegador."""
+
+    url_alta_eventos = (
+        "https://deportesweb.madrid.es/DeportesWeb/"
+        f"Modulos/VentaServicios/Eventos/AltaEventos?token={token}"
+    )
+
     event_argument = json.dumps({
+        "controlID": "ContentFixedSection_uAltaEventos_uAltaEventosFechas",
         "action": "Load",
         "args": {
             "availability": False,
             "date": fecha
         }
     })
-    
+
     post_data = {
-        "ctl00$ScriptManager1": "ctl00$ContentFixedSection$uAltaEventos$uAltaEventosFechas$uAlert$uplAlert|ContentFixedSection_uAltaEventos_uAltaEventosFechas_uAlert_uplAlert",
-        "__EVENTTARGET": "ContentFixedSection_uAltaEventos_uAltaEventosFechas_uAlert_uplAlert",
+        "ctl00$ScriptManager1": "ctl00$uAlert$uplAlert|uAlert_uplAlert",
+        "__EVENTTARGET": "uAlert_uplAlert",
         "__EVENTARGUMENT": event_argument,
         "__VIEWSTATE": state["__VIEWSTATE"],
         "__VIEWSTATEGENERATOR": state["__VIEWSTATEGENERATOR"],
         "ContentFixedSection_uAltaEventos_uAltaEventosFechas_availability_filter": "on",
         "__ASYNCPOST": "true",
     }
-    
+
     if "__EVENTVALIDATION" in state:
         post_data["__EVENTVALIDATION"] = state["__EVENTVALIDATION"]
-    
-    encoded_data = urllib.parse.urlencode(post_data)
-    content_length = len(encoded_data)
-    
-    print(f"\n{'='*60}")
-    print(f"📅 Cargando eventos para: {fecha}")
-    print(f"📊 Content-Length: {content_length} bytes")
-    
+
     headers = {
         **HEADERS,
         "Referer": url_alta_eventos,
         "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
     }
-    
-    r = session.post(url_alta_eventos, data=post_data, headers=headers)
+
+    print(f"\n📅 Cargando eventos para: {fecha}")
+
+    r = session.post(
+        url_alta_eventos,
+        data=post_data,
+        headers=headers
+    )
     r.raise_for_status()
-    
+
     update_state_from_delta(state, r.text)
-    
-    print(f"✅ Respuesta recibida ({len(r.text)} bytes)")
-    print(f"{'='*60}\n")
-    
+
+    print(f"✅ Respuesta recibida ({len(r.text)} caracteres)")
+    print("HTTP:", r.status_code)
+
+    for campo in ["NOM_EVENTO", "COD_SESION", "HORA_DESDE"]:
+        print(f"🔎 {campo}: {r.text.count(campo)} apariciones")
+
     return r.text
 
 
