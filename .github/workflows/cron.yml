@@ -1,42 +1,36 @@
 name: Reservas Deportes
+run-name: Reservas · ${{ github.event.schedule || 'manual' }} · Madrid
 
 on:
   schedule:
-    # ============================================
-    # HORARIOS UTC (aprox. 2 horas antes de apertura en verano)
-    # España UTC+1 (invierno) / UTC+2 (verano)
-    # Clases abren 49h antes
-    # ============================================
+    # Horas de Madrid: timezone ajusta automáticamente verano e invierno.
+    # El cron pide iniciar el workflow; GitHub puede retrasarlo.
+    # ProgramaFundi.py calcula la apertura real (clase - 49 h) y espera.
+    # Se evitan los minutos en punto para reducir retrasos por carga.
 
-    # SÁBADO (para clases del Lunes)
-    # Lunes 15:45 → abre Sáb 14:45 hora de Madrid → ejecutar 10:45 UTC
-    # Lunes 17:00 → abre Sáb 16:00 hora de Madrid → ejecutar 12:00 UTC
-    - cron: "45 10 * * 6"
-    - cron: "00 12 * * 6"
+    # 11:17: sáb→lun, dom→mar, lun→mié, mar→jue, mié→vie.
+    # Primera apertura habitual a las 14:45: margen de 3 h 28 min.
+    - cron: "17 11 * * 0,1,2,3,6"
+      timezone: Europe/Madrid
 
-    # DOMINGO (para clases del Martes)
-    # Martes 15:45 → abre Dom 14:45 hora de Madrid → ejecutar 10:45 UTC
-    - cron: "45 10 * * 0"
+    # 12:17: segunda ejecución para las clases del lunes, miércoles y viernes.
+    # Apertura habitual a las 16:00: solicitud con 3 h 43 min de margen.
+    # Si la anterior sigue activa, esta espera en la cola.
+    - cron: "17 12 * * 1,3,6"
+      timezone: Europe/Madrid
 
-    # LUNES (para clases del Miércoles)
-    # Miércoles 15:45 → abre Lun 14:45 hora de Madrid → ejecutar 10:45 UTC
-    # Miércoles 17:00 → abre Lun 16:00 hora de Madrid → ejecutar 12:00 UTC
-    - cron: "45 10 * * 1"
-    - cron: "00 12 * * 1"
+    # 12:47 miércoles: tercera ejecución para la clase del viernes a las 18:00.
+    # Apertura a las 17:00: solicitud con 4 h 13 min de margen.
+    - cron: "47 12 * * 3"
+      timezone: Europe/Madrid
 
-    # MARTES (para clases del Jueves)
-    # Jueves 15:45 → abre Mar 14:45 hora de Madrid → ejecutar 10:45 UTC
-    - cron: "45 10 * * 2"
-
-    # MIÉRCOLES (para clases del Viernes)
-    # Viernes 15:45 → abre Mié 14:45 hora de Madrid → ejecutar 10:45 UTC
-    # Viernes 17:00 → abre Mié 16:00 hora de Madrid → ejecutar 12:00 UTC
-    # Viernes 18:00 → abre Mié 17:00 hora de Madrid → ejecutar 13:00 UTC
-    - cron: "45 10 * * 3"
-    - cron: "00 12 * * 3"
-    - cron: "00 13 * * 3"
+    # El sábado anterior al cambio de hora, restar 49 horas reales puede
+    # desplazar la apertura una hora. El programa hace ese cálculo en UTC.
 
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: reservas-deportes
@@ -46,16 +40,45 @@ concurrency:
 jobs:
   run-script:
     runs-on: ubuntu-latest
+    # Si se saltan clases ya reservadas, puede esperar hasta las 17:00.
+    # Desde las 11:17 queda dentro del límite de 6 horas del runner.
+    timeout-minutes: 360
 
     env:
       TZ: Europe/Madrid
+      PYTHONUNBUFFERED: "1"
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
       MONGO_URL: ${{ secrets.MONGO_URL }}
+      PERSON_CODE: ${{ secrets.PERSON_CODE }}
       NOMBRE: ${{ secrets.NOMBRE }}
       APELLIDOS: ${{ secrets.APELLIDOS }}
 
     steps:
+      - name: Registrar disparador y hora real de inicio
+        env:
+          CRON_ACTIVADOR: ${{ github.event.schedule || 'manual' }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from datetime import datetime, timezone
+          from zoneinfo import ZoneInfo
+
+          ahora = datetime.now(timezone.utc)
+          lineas = [
+              f"Evento: {os.environ['GITHUB_EVENT_NAME']}",
+              f"Cron solicitado (Madrid): {os.environ['CRON_ACTIVADOR']}",
+              f"Inicio real del runner (Madrid): {ahora.astimezone(ZoneInfo('Europe/Madrid')).isoformat(timespec='seconds')}",
+              f"Inicio real del runner (Cork): {ahora.astimezone(ZoneInfo('Europe/Dublin')).isoformat(timespec='seconds')}",
+              f"Inicio real del runner (UTC): {ahora.isoformat(timespec='seconds')}",
+              f"Commit: {os.environ['GITHUB_SHA']}",
+              f"Ejecución: {os.environ['GITHUB_RUN_ID']} / intento {os.environ['GITHUB_RUN_ATTEMPT']}",
+          ]
+          print('\n'.join(lineas))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as resumen:
+              resumen.write('### Inicio de reservas\n\n' + '\n'.join('- ' + linea for linea in lineas) + '\n')
+          PY
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -66,18 +89,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pymongo motor
-          playwright install chromium
-
-      - name: Debug env
-        run: |
-          echo "EMAIL length: ${#EMAIL}"
-          echo "PASSWORD length: ${#PASSWORD}"
-          echo "MONGO_URL length: ${#MONGO_URL}"
-          echo "NOMBRE length: ${#NOMBRE}"
-          echo "APELLIDOS length: ${#APELLIDOS}"
+          # La versión actual del bot usa peticiones HTTP y no necesita Chromium.
+          python -m pip install --disable-pip-version-check requests beautifulsoup4 python-dotenv pymongo motor tzdata
 
       - name: Run script
-        run: python ProgramaFundi.py
+        run: |
+          python -c 'from datetime import datetime; from zoneinfo import ZoneInfo; print("Inicio de ProgramaFundi.py (Madrid):", datetime.now(ZoneInfo("Europe/Madrid")).isoformat(timespec="seconds"))'
+          python -u ProgramaFundi.py

@@ -13,6 +13,7 @@ import unicodedata
 from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
 from html import unescape as html_unescape
+from time import perf_counter
 
 # =========================
 # Configuración
@@ -54,7 +55,8 @@ DIAS_SEMANA = {
 }
 
 HORAS_ANTES_APERTURA = 49
-SEGUNDOS_PREPARACION = 60
+SEGUNDOS_PREPARACION = 120
+SEGUNDOS_PRECARGA = 45
 INTENTOS_BUSQUEDA = 6
 INTERVALO_BUSQUEDA = 2
 HTTP_TIMEOUT = (10, 30)
@@ -84,6 +86,67 @@ def segundos_hasta(momento: datetime) -> float:
 def hora_local_str(momento: datetime) -> str:
     """Formatea un momento en la hora del ordenador (p. ej. Cork)."""
     return momento.astimezone().strftime("%d/%m/%Y %H:%M")
+
+
+def peticion_medida(session, metodo: str, url: str, *, etapa: str,
+                    traza=None, apertura=None, **kwargs):
+    """Mide la llamada HTTP completa. No registra cookies ni datos del formulario."""
+    evento = {"etapa": etapa, "metodo": metodo.upper()}
+    # Instante local inmediatamente anterior a llamar a requests, no llegada al servidor.
+    inicio = ahora_web()
+    reloj = perf_counter()
+    try:
+        r = getattr(session, metodo.lower())(url, timeout=HTTP_TIMEOUT, **kwargs)
+    except requests.RequestException as error:
+        evento["error_red"] = type(error).__name__
+        raise
+    else:
+        evento.update({
+            "http": r.status_code,
+            "ruta_final": urllib.parse.urlsplit(r.url).path,
+            "date_servidor": getattr(r, "headers", {}).get("Date"),
+            "content_type": getattr(r, "headers", {}).get("Content-Type"),
+        })
+        return r
+    finally:
+        duracion = (perf_counter() - reloj) * 1000
+        fin = ahora_web()
+        evento.update({"inicio_madrid": inicio.isoformat(timespec="milliseconds"),
+                       "fin_madrid": fin.isoformat(timespec="milliseconds"),
+                       "duracion_ms": round(duracion, 3)})
+        if apertura is not None:
+            desfase = (inicio.astimezone(timezone.utc) - apertura.astimezone(timezone.utc)).total_seconds()
+            evento["inicio_respecto_apertura_ms"] = round(desfase * 1000, 3)
+        if traza is not None:
+            traza.append(evento)
+        # Imprimir después de la petición evita retrasar su inicio por la consola.
+        print(f"   ⏱️ {etapa}: inicio {inicio:%H:%M:%S}.{inicio.microsecond // 1000:03d} "
+              f"→ fin {fin:%H:%M:%S}.{fin.microsecond // 1000:03d} Madrid | {duracion:.1f} ms "
+              f"| HTTP {evento.get('http', 'sin respuesta')}")
+        if apertura is not None:
+            print(f"      Inicio respecto a la apertura: {desfase:+.3f} s")
+        if evento.get("date_servidor"):
+            print(f"      Cabecera Date del servidor: {evento['date_servidor']}")
+
+
+def extraer_mensajes_web(respuesta: str) -> list[str]:
+    """Lee los avisos de la web sin analizar de nuevo toda la página con BeautifulSoup."""
+    mensajes = []
+    patron = r'''<span\b[^>]*\bid=["'][^"']*spnAlert(?:Danger|Warning|Success|Info)(?:Collapse)?["'][^>]*>(.*?)</span\s*>'''
+    for match in re.finditer(patron, respuesta, re.I | re.S):
+        mensaje = " ".join(BeautifulSoup(match.group(1), "html.parser").get_text(" ", strip=True).split())
+        if mensaje and mensaje not in mensajes:
+            mensajes.append(mensaje)
+    return mensajes
+
+
+def registrar_mensajes_web(respuesta: str, etapa: str, traza: list) -> list[str]:
+    mensajes = extraer_mensajes_web(respuesta)
+    traza.append({"etapa": etapa, "hora_madrid": ahora_web().isoformat(timespec="milliseconds"),
+                  "mensajes_web": mensajes})
+    for mensaje in mensajes:
+        print(f"   💬 Web: {mensaje}")
+    return mensajes
 
 # =========================
 # Gestión de BD
@@ -401,7 +464,8 @@ def extraer_cod_sesion(html_response: str, nombre_clase: str, hora_clase: str, f
     return sesion
 
 
-def load_events_for_date(session: requests.Session, token: str, fecha: str, state: dict):
+def load_events_for_date(session: requests.Session, token: str, fecha: str, state: dict,
+                         *, traza=None, apertura=None, listar=True):
     """Carga los eventos de una fecha específica"""
     url_alta_eventos = f"https://deportesweb.madrid.es/DeportesWeb/Modulos/VentaServicios/Eventos/AltaEventos?token={token}"
 
@@ -440,7 +504,8 @@ def load_events_for_date(session: requests.Session, token: str, fecha: str, stat
         "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
     }
 
-    r = session.post(url_alta_eventos, data=post_data, headers=headers, timeout=HTTP_TIMEOUT)
+    r = peticion_medida(session, "post", url_alta_eventos, etapa="Consulta de actividades",
+                        traza=traza, apertura=apertura, data=post_data, headers=headers)
     r.raise_for_status()
     validar_sesion(r)
 
@@ -448,27 +513,19 @@ def load_events_for_date(session: requests.Session, token: str, fecha: str, stat
 
     print(f"✅ Respuesta recibida ({len(r.text)} caracteres)")
     print(f"HTTP: {r.status_code}")
-    for campo in ("NOM_EVENTO", "COD_SESION", "HORA_DESDE"):
-        print(f"🔎 {campo}: {r.text.count(campo)} apariciones")
-    mostrar_sesiones(leer_sesiones(r.text))
+    registrar_mensajes_web(r.text, "Respuesta de actividades", traza if traza is not None else [])
+    if listar:
+        for campo in ("NOM_EVENTO", "COD_SESION", "HORA_DESDE"):
+            print(f"🔎 {campo}: {r.text.count(campo)} apariciones")
+        mostrar_sesiones(leer_sesiones(r.text))
     print(f"{'='*60}\n")
 
     return r.text
 
 
-def seleccionar_clase(session: requests.Session, token: str, sesion_data: dict, person_code: str, state: dict):
+def preparar_seleccion(token: str, sesion_data: dict, person_code: str, state: dict):
     """
-    Hace el POST para seleccionar/reservar una clase específica.
-
-    Args:
-        session: Sesión de requests
-        token: Token de AltaEventos
-        sesion_data: Datos de la sesión obtenidos de extraer_cod_sesion
-        person_code: Código de persona del usuario
-        state: Estado de ASP.NET (viewstate, etc.)
-
-    Returns:
-        Texto de la respuesta del servidor
+    Construye el POST sin enviarlo; puede prepararse antes de la apertura.
     """
     if not person_code:
         raise ValueError("No hay PERSON_CODE para seleccionar la clase.")
@@ -507,20 +564,19 @@ def seleccionar_clase(session: requests.Session, token: str, sesion_data: dict, 
     if "__EVENTVALIDATION" in state:
         post_data["__EVENTVALIDATION"] = state["__EVENTVALIDATION"]
 
-    print(f"\n{'='*60}")
-    print(f"🎫 Seleccionando clase: {sesion_data['nom_evento']}")
-    print(f"   📅 Fecha: {sesion_data['fecha']}")
-    print(f"   ⏰ Hora: {sesion_data['hora_desde']} - {sesion_data['hora_hasta']}")
-    print(f"   📍 Sala: {sesion_data['nom_sala']}")
-    print(f"   🔑 COD_SESION: {sesion_data['cod_sesion']}")
-
     headers = {
         **HEADERS,
         "Referer": url_alta_eventos,
         "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
     }
+    return url_alta_eventos, post_data, headers
 
-    r = session.post(url_alta_eventos, data=post_data, headers=headers, timeout=HTTP_TIMEOUT)
+
+def seleccionar_clase(session: requests.Session, token: str, sesion_data: dict,
+                       person_code: str, state: dict, *, preparada=None, traza=None, apertura=None):
+    url, post_data, headers = preparada or preparar_seleccion(token, sesion_data, person_code, state)
+    r = peticion_medida(session, "post", url, etapa="Selección de clase",
+                        traza=traza, apertura=apertura, data=post_data, headers=headers)
     r.raise_for_status()
 
     update_state_from_delta(state, r.text)
@@ -531,7 +587,7 @@ def seleccionar_clase(session: requests.Session, token: str, sesion_data: dict, 
     return r.text
 
 
-def confirmar_carrito(session: requests.Session, referer: str, state: dict):
+def confirmar_carrito(session: requests.Session, referer: str, state: dict, *, traza=None, apertura=None):
     """
     Hace el GET a CarritoConfirmar para cargar la página de confirmación.
 
@@ -561,17 +617,15 @@ def confirmar_carrito(session: requests.Session, referer: str, state: dict):
     print(f"\n{'='*60}")
     print(f"🛒 Accediendo a CarritoConfirmar...")
 
-    r = session.get(url_carrito, headers=headers, timeout=HTTP_TIMEOUT)
+    r = peticion_medida(session, "get", url_carrito, etapa="Carga del carrito",
+                        traza=traza, apertura=apertura, headers=headers)
     r.raise_for_status()
     validar_sesion(r)
 
     # Parsear el HTML para obtener el nuevo state
-    soup = BeautifulSoup(r.text, "html.parser")
-    state["__VIEWSTATE"] = soup.find("input", {"id": "__VIEWSTATE"})["value"]
-    state["__VIEWSTATEGENERATOR"] = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})["value"]
-    ev_tag = soup.find("input", {"id": "__EVENTVALIDATION"})
-    if ev_tag:
-        state["__EVENTVALIDATION"] = ev_tag["value"]
+    nuevo_state = parse_initial_state(r.text)
+    state.clear()
+    state.update(nuevo_state)
 
     print(f"✅ Respuesta recibida ({len(r.text)} bytes)")
     print(f"{'='*60}\n")
@@ -579,7 +633,8 @@ def confirmar_carrito(session: requests.Session, referer: str, state: dict):
     return r.text
 
 
-def finalizar_reserva(session: requests.Session, state: dict, nombre: str, apellidos: str, correo: str):
+def finalizar_reserva(session: requests.Session, state: dict, nombre: str, apellidos: str, correo: str,
+                      *, traza=None, apertura=None):
     """
     Hace el POST final para confirmar la reserva en el carrito.
 
@@ -625,7 +680,8 @@ def finalizar_reserva(session: requests.Session, state: dict, nombre: str, apell
     print(f"✅ Finalizando reserva...")
 
 
-    r = session.post(url_carrito, data=post_data, headers=headers, timeout=HTTP_TIMEOUT)
+    r = peticion_medida(session, "post", url_carrito, etapa="Confirmación de reserva",
+                        traza=traza, apertura=apertura, data=post_data, headers=headers)
     r.raise_for_status()
 
     update_state_from_delta(state, r.text)
@@ -709,15 +765,22 @@ async def main():
             await esperar_hasta(preparacion)
             # Autenticar cerca de la apertura, después de la espera larga.
             contexto = iniciar_sesion(config["email"], config["password"], config["person_code"])
-            await esperar_hasta(apertura)
-            print("   🔔 Apertura alcanzada. Consultando la lista actual de clases...")
-            resultados.append(await procesar_clase(contexto, item, config, db_manager))
+            traza = []
+            sesion_preparada = None
+            if segundos_hasta(apertura) > 0:
+                await esperar_hasta(apertura - timedelta(seconds=SEGUNDOS_PRECARGA))
+                sesion_preparada = precargar_sesion(contexto, item, traza)
+            resultados.append(await procesar_clase(
+                contexto, item, config, db_manager, sesion_preparada=sesion_preparada,
+                esperar_apertura=True, traza=traza))
 
         confirmadas = resultados.count("confirmada")
         existentes = resultados.count("ya_reservada")
+        sin_plazas = resultados.count("sin_plazas")
         fallidas = resultados.count("sin_confirmar")
-        print(f"\n📊 Resultado: {confirmadas} nuevas confirmadas | {existentes} ya reservadas | {fallidas} sin confirmar")
-        return 1 if fallidas else 0
+        print(f"\n📊 Resultado: {confirmadas} nuevas confirmadas | {existentes} ya reservadas "
+              f"| {sin_plazas} sin plazas | {fallidas} sin confirmar")
+        return 1 if fallidas or sin_plazas else 0
     finally:
         if contexto is not None:
             contexto["session"].close()
@@ -906,7 +969,9 @@ async def buscar_sesion_actualizada(contexto: dict, item: dict, email: str, pass
             if intento > 1:
                 recargar_eventos(contexto)
             respuesta = load_events_for_date(contexto["session"], contexto["alta_token"],
-                                            item["fecha_para_post"], contexto["state"])
+                                            item["fecha_para_post"], contexto["state"],
+                                            traza=contexto.get("traza"), apertura=item["hora_apertura"], listar=False)
+            contexto["ultima_consulta"] = (item["fecha_para_post"], respuesta)
             if not contexto["person_code"]:
                 contexto["person_code"] = extraer_person_code(respuesta)
             sesion = extraer_cod_sesion(respuesta, item["clase"]["nombre"],
@@ -926,8 +991,10 @@ async def buscar_sesion_actualizada(contexto: dict, item: dict, email: str, pass
             print("   🔄 La consulta ha vuelto al login. Renovando sesión...")
             contexto["session"].close()
             nuevo = iniciar_sesion(email, password, person_config)
+            traza = contexto.get("traza")
             contexto.clear()
             contexto.update(nuevo)
+            contexto["traza"] = traza
             renovada = True
         except (requests.Timeout, requests.ConnectionError) as error:
             motivo = f"Falló la consulta de actividades: {type(error).__name__}."
@@ -936,54 +1003,146 @@ async def buscar_sesion_actualizada(contexto: dict, item: dict, email: str, pass
             await asyncio.sleep(INTERVALO_BUSQUEDA)
 
     print(f"   ❌ Búsqueda agotada. {motivo}")
+    mostrar_sesiones(leer_sesiones(respuesta))
     nombre = f"eventos_{item['fecha_para_post']}_{item['clase']['hora'].replace(':', '')}.html"
     guardar_diagnostico(respuesta, nombre)
     return None
 
 
-def indica_reserva_existente(respuesta: str) -> bool:
+def indica_reserva_existente(respuesta: str, mensajes=None) -> bool:
     """El aviso de una reserva por persona se trata como reserva ya existente."""
-    texto = html_unescape(urllib.parse.unquote(respuesta))
-    soup = BeautifulSoup(texto, "html.parser")
-    aviso = soup.find(id="uAlert_spnAlertDanger")
-    contenido = aviso.get_text(" ", strip=True) if aviso else soup.get_text(" ", strip=True)
-    contenido = " ".join(contenido.split())
+    if mensajes is None:
+        mensajes = extraer_mensajes_web(respuesta)
+    contenido = " ".join(mensajes)
+    if not contenido and "<" not in respuesta:
+        contenido = " ".join(html_unescape(urllib.parse.unquote(respuesta)).split())
     return re.search(
         r"\bLa sesión seleccionada no permite más de 1 reserva\(s\) por persona\b",
         contenido, re.I,
     ) is not None
 
 
-async def procesar_clase(contexto: dict, item: dict, config: dict, db_manager) -> str:
-    sesion = await buscar_sesion_actualizada(contexto, item, config["email"], config["password"], config["person_code"])
-    if sesion is None:
-        return "sin_confirmar"
-    if not contexto["person_code"]:
-        raise RuntimeError("No se encontró PERSON_CODE. Pon en .env el personCode capturado al seleccionar una clase con la misma cuenta que EMAIL.")
+def validar_datos_sesion(sesion: dict, item: dict) -> None:
     requeridos = ("cod_sesion", "cod_sala", "nom_sala", "cod_evento", "nom_evento", "fecha", "hora_desde",
                   "hora_hasta", "habilitar_limite_reservas", "limite_reservas", "salas_multiples")
     faltan = [k for k in requeridos if sesion.get(k) in (None, "")]
     if faltan:
         raise RuntimeError("La clase aparece, pero faltan datos para seleccionarla: " + ", ".join(faltan))
+    if (normalizar_nombre(sesion["nom_evento"]) != normalizar_nombre(item["clase"]["nombre"])
+            or sesion["fecha"] != item["fecha_para_post"] or sesion["hora_desde"] != item["clase"]["hora"]):
+        raise RuntimeError("Los datos preparados no corresponden a la clase, fecha y hora del objetivo.")
+
+
+def precargar_sesion(contexto: dict, item: dict, traza: list) -> dict | None:
+    """Consulta una vez antes de abrir; que aún no aparezca no cancela la espera."""
+    print("\n📦 Preparando la clase antes de la apertura...")
+    try:
+        respuesta = load_events_for_date(contexto["session"], contexto["alta_token"],
+                                        item["fecha_para_post"], contexto["state"],
+                                        traza=traza, apertura=item["hora_apertura"])
+        contexto["ultima_consulta"] = (item["fecha_para_post"], respuesta)
+        if not contexto["person_code"]:
+            contexto["person_code"] = extraer_person_code(respuesta)
+        sesion = extraer_cod_sesion(respuesta, item["clase"]["nombre"],
+                                   item["clase"]["hora"], item["fecha_para_post"])
+        if sesion is not None:
+            validar_datos_sesion(sesion, item)
+            if not contexto["person_code"]:
+                raise RuntimeError("No se pudo obtener PERSON_CODE durante la preparación.")
+            # El aforo observado antes de abrir no se usa para descartar el intento.
+            return sesion
+        motivo = "La clase aún no aparece en la consulta previa."
+    except (requests.RequestException, RuntimeError) as error:
+        motivo = str(error) if isinstance(error, RuntimeError) else type(error).__name__
+    print(f"   ℹ️ {motivo} Se consultará de nuevo al abrir.")
+    traza.append({"etapa": "Precarga sin sesión", "motivo": motivo,
+                  "hora_madrid": ahora_web().isoformat(timespec="milliseconds")})
+    return None
+
+
+async def procesar_clase(contexto: dict, item: dict, config: dict, db_manager,
+                         *, sesion_preparada=None, esperar_apertura=False, traza=None) -> str:
+    traza = [] if traza is None else traza
+    contexto["traza"] = traza
+    inicio = ahora_web()
+    resultado = "error"
+    try:
+        resultado = await ejecutar_intento(contexto, item, config, db_manager,
+                                          sesion_preparada, esperar_apertura, traza)
+        return resultado
+    except requests.RequestException as error:
+        resultado = "sin_confirmar"
+        traza.append({"etapa": "Error de petición", "error": type(error).__name__})
+        if error.response is not None:
+            registrar_mensajes_web(error.response.text, "Error HTTP", traza)
+            guardar_diagnostico(error.response.text, f"error_{item['fecha_para_post']}_{item['clase']['hora'].replace(':', '')}.html")
+        print(f"   ❌ {type(error).__name__}: no se ha podido confirmar el resultado. No se repite automáticamente la selección ni la confirmación.")
+        return resultado
+    except Exception as error:
+        traza.append({"etapa": "Error", "error": type(error).__name__})
+        raise
+    finally:
+        registro = {"clase": item["clase"]["nombre"], "fecha_clase_madrid": item["fecha_clase"].isoformat(),
+                    "apertura_madrid": item["hora_apertura"].isoformat(),
+                    "inicio_madrid": inicio.isoformat(timespec="milliseconds"),
+                    "resultado": resultado, "precarga_utilizada": sesion_preparada is not None,
+                    "eventos": traza}
+        nombre = f"diagnostico_{item['fecha_para_post']}_{item['clase']['hora'].replace(':', '')}_{inicio:%Y%m%dT%H%M%S_%f}.json"
+        guardar_diagnostico(json.dumps(registro, ensure_ascii=False, indent=2), nombre)
+        ultima = contexto.get("ultima_consulta")
+        if resultado not in ("confirmada", "ya_reservada") and ultima and ultima[0] == item["fecha_para_post"]:
+            guardar_diagnostico(ultima[1], f"eventos_{item['fecha_para_post']}_{item['clase']['hora'].replace(':', '')}.html")
+
+
+async def ejecutar_intento(contexto, item, config, db_manager, sesion_preparada, esperar_apertura, traza):
+    sesion = sesion_preparada
+    if sesion is None:
+        if esperar_apertura:
+            await esperar_hasta(item["hora_apertura"])
+        sesion = await buscar_sesion_actualizada(contexto, item, config["email"], config["password"], config["person_code"])
+    if sesion is None:
+        return "sin_confirmar"
+    validar_datos_sesion(sesion, item)
+    if not contexto["person_code"]:
+        raise RuntimeError("No se encontró PERSON_CODE. Pon en .env el personCode capturado al seleccionar una clase con la misma cuenta que EMAIL.")
+    preparada = preparar_seleccion(contexto["alta_token"], sesion, contexto["person_code"], contexto["state"])
+    traza.append({"etapa": "Selección preparada", "hora_madrid": ahora_web().isoformat(timespec="milliseconds"),
+                  "cod_sesion": sesion["cod_sesion"], "plazas_observadas": sesion["plazas_disponibles"],
+                  "plazas_totales": sesion["plazas_totales"], "consulta_previa": sesion_preparada is not None})
+    print(f"\n🎫 Selección preparada: {sesion['nom_evento']} | {sesion['fecha']} {sesion['hora_desde']} "
+          f"Madrid | {sesion['nom_sala']} | sesión {sesion['cod_sesion']}")
+    if esperar_apertura:
+        print("   Al abrir se enviará la selección preparada.")
+        await esperar_hasta(item["hora_apertura"])
 
     # Solo la consulta se reintenta. Una selección o confirmación con resultado
     # desconocido se comunica como tal, sin repetirla automáticamente.
     respuesta = seleccionar_clase(contexto["session"], contexto["alta_token"], sesion,
-                                  contexto["person_code"], contexto["state"])
-    if indica_reserva_existente(respuesta):
+                                  contexto["person_code"], contexto["state"], preparada=preparada,
+                                  traza=traza, apertura=item["hora_apertura"])
+    mensajes = registrar_mensajes_web(respuesta, "Respuesta de selección", traza)
+    if indica_reserva_existente(respuesta, mensajes):
         print("   ✅ Ya reservada: la web indica que ya tienes una reserva para esta sesión.")
         if db_manager:
             await db_manager.guardar_reserva(item["clase"], item["fecha_clase"])
         return "ya_reservada"
     texto = html_unescape(urllib.parse.unquote(respuesta))
     if "pageRedirect" not in texto or "CarritoConfirmar" not in texto:
-        print("   ❌ La web no ha enviado la selección al carrito.")
+        aforo_lleno = any(normalizar_nombre(m).rstrip(".") == "el aforo de la zona está lleno" for m in mensajes)
+        if aforo_lleno:
+            print("   ❌ Reserva rechazada: la web indica aforo completo.")
+        elif mensajes:
+            print("   ❌ La web ha rechazado la selección con el mensaje indicado arriba.")
+        else:
+            print("   ❌ Respuesta sin aviso reconocible y sin acceso al carrito. Revisa el HTML guardado.")
         guardar_diagnostico(respuesta, f"seleccion_{sesion['cod_sesion']}.html")
-        return "sin_confirmar"
+        return "sin_plazas" if aforo_lleno else "sin_confirmar"
     print("   ✅ Clase añadida al carrito; falta confirmar.")
     referer = f"https://deportesweb.madrid.es/DeportesWeb/Modulos/VentaServicios/Eventos/AltaEventos?token={contexto['alta_token']}"
-    confirmar_carrito(contexto["session"], referer, contexto["state"])
-    respuesta = finalizar_reserva(contexto["session"], contexto["state"], config["nombre"], config["apellidos"], config["email"])
+    confirmar_carrito(contexto["session"], referer, contexto["state"], traza=traza, apertura=item["hora_apertura"])
+    respuesta = finalizar_reserva(contexto["session"], contexto["state"], config["nombre"], config["apellidos"], config["email"],
+                                  traza=traza, apertura=item["hora_apertura"])
+    registrar_mensajes_web(respuesta, "Respuesta de confirmación", traza)
     texto = urllib.parse.unquote(respuesta)
     if "pageRedirect" not in texto or "CarritoResultado" not in texto:
         print("   ❌ No se recibió la confirmación esperada de la web.")
